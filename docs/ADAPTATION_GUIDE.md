@@ -3,14 +3,17 @@
 Start by running the sandbox demo unchanged. Then adapt one component at a time.
 
 Use `tools/adopt.py` to create a reviewable starter bundle outside this repository. It previews by
-default, requires `--execute` to copy, refuses non-empty targets, and never writes directly into
+default, requires `--execute` to copy, requires a new target path, verifies copied hashes in a
+temporary sibling, and atomically publishes the completed bundle. It never writes directly into
 live Claude Code, Codex, or home configuration.
 
 ## Add a component
 
 1. Create a directory under `components/<name>/desired/`.
 2. Put only non-secret desired files in it.
-3. Add a registry entry with a relative source and destination.
+3. Add a registry entry with a relative source and destination. Declare `platforms` as `any`,
+   `windows`, `macos`, or `linux`; the controller rejects unsupported hosts and overlapping enabled
+   destination roots.
 4. Enable it in a profile.
 5. Run `plan` and confirm the destination is correct.
 6. Add a test that proves missing, matching, and drifted states.

@@ -1,7 +1,8 @@
 # Quick start
 
-This repository supports Windows, macOS, and Linux. The primary commands are Python programs, so a
-POSIX shell is optional.
+This repository is designed for Windows, macOS, and Linux. The primary commands are Python
+programs, so a POSIX shell is optional. Design compatibility is not a claim that every release was
+natively executed on all three operating systems.
 
 ## Get the repository
 
@@ -13,6 +14,25 @@ cd sysops_pub
 ```
 
 Install Python 3.11 or newer. No Python packages are required for the tour or core tests.
+
+Install the mandatory local pre-push gate after cloning. Preview first, then execute:
+
+macOS or Linux:
+
+```sh
+python3 tools/bootstrap.py
+python3 tools/bootstrap.py --execute
+```
+
+Windows:
+
+```powershell
+py -3 tools/bootstrap.py
+py -3 tools/bootstrap.py --execute
+```
+
+This writes only the clone-local `core.hooksPath` setting. The tracked hook runs the complete local
+release verifier before Git sends a push. It does not configure hosted CI.
 
 ## Choose a path
 
@@ -69,14 +89,15 @@ file wholesale.
 
 ## Maintainer verification
 
-The dependency-free suite works on every supported platform:
+The dependency-free suite is the portable compatibility contract:
 
 ```text
 python tools/test.py
 ```
 
-The complete release verifier additionally runs Black, Ruff, gitleaks, and ShellCheck when they are
-installed. The private repository maintainer runs it with `--require-tools` before pushing:
+The complete release verifier requires Black, Ruff, gitleaks, and ShellCheck in maintainer mode. It
+also verifies that the tracked local pre-push hook is wired, scans both the current tree and Git
+history with gitleaks, and runs automatically on push:
 
 ```text
 python tools/verify_release.py --require-tools

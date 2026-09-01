@@ -114,6 +114,7 @@ class ControlLoopTests(unittest.TestCase):
                             "name": "agent-policy",
                             "source": "../outside",
                             "destination": ".config/example",
+                            "platforms": ["any"],
                         }
                     ],
                 }
@@ -184,6 +185,7 @@ class ControlLoopTests(unittest.TestCase):
                             "name": "empty",
                             "source": "components/empty/desired",
                             "destination": ".config/empty",
+                            "platforms": ["any"],
                         }
                     ],
                 }
@@ -225,6 +227,124 @@ class ControlLoopTests(unittest.TestCase):
             unmanaged_rows[0]["path"],
             ".config/sysops_pub/shell-banner/extra.txt",
         )
+
+    def test_dry_run_rejects_wrong_type_destination(self) -> None:
+        self.initialize()
+        wrong_type = self.target / ".config" / "sysops_pub" / "shell-banner" / "banner.txt"
+        wrong_type.mkdir(parents=True)
+        result, stdout, stderr = self.run_control("apply", "--target", str(self.target))
+        self.assertEqual(result, 2)
+        self.assertIn("WRONG-TYPE", stdout)
+        self.assertIn("refusing unsafe destination", stderr)
+
+    def test_selected_component_must_support_current_platform(self) -> None:
+        registry = Path(self.temporary.name) / "platform-registry.json"
+        registry.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "components": [
+                        {
+                            "name": "agent-policy",
+                            "source": "components/agent-policy/desired",
+                            "destination": ".config/example",
+                            "platforms": ["linux"],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        profile = self.write_profile({"agent-policy": {"enabled": True}})
+        self.initialize()
+        with mock.patch.object(control, "_current_platform", return_value="windows"):
+            result, _stdout, stderr = self.run_control(
+                "--registry",
+                str(registry),
+                "--profile",
+                str(profile),
+                "plan",
+                "--target",
+                str(self.target),
+            )
+        self.assertEqual(result, 2)
+        self.assertIn("does not support platform windows", stderr)
+
+    def test_registry_rejects_unknown_platform(self) -> None:
+        registry = Path(self.temporary.name) / "platform-registry.json"
+        registry.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "components": [
+                        {
+                            "name": "agent-policy",
+                            "source": "components/agent-policy/desired",
+                            "destination": ".config/example",
+                            "platforms": ["plan9"],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        profile = self.write_profile({"agent-policy": {"enabled": True}})
+        self.initialize()
+        result, _stdout, stderr = self.run_control(
+            "--registry",
+            str(registry),
+            "--profile",
+            str(profile),
+            "plan",
+            "--target",
+            str(self.target),
+        )
+        self.assertEqual(result, 2)
+        self.assertIn("unsupported platform", stderr)
+
+    def test_overlapping_component_destination_roots_are_rejected(self) -> None:
+        fixture_root = Path(self.temporary.name) / "fixture-repository"
+        for name in ("outer", "inner"):
+            source = fixture_root / "components" / name / "desired"
+            source.mkdir(parents=True)
+            (source / f"{name}.txt").write_text(f"{name}\n", encoding="utf-8")
+        registry = fixture_root / "registry.json"
+        registry.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "components": [
+                        {
+                            "name": "outer",
+                            "source": "components/outer/desired",
+                            "destination": "root",
+                            "platforms": ["any"],
+                        },
+                        {
+                            "name": "inner",
+                            "source": "components/inner/desired",
+                            "destination": "root/sub",
+                            "platforms": ["any"],
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        profile = self.write_profile({"outer": {"enabled": True}, "inner": {"enabled": True}})
+        self.initialize()
+        with mock.patch.object(control, "REPO_ROOT", fixture_root.resolve()):
+            result, _stdout, stderr = self.run_control(
+                "--registry",
+                str(registry),
+                "--profile",
+                str(profile),
+                "plan",
+                "--target",
+                str(self.target),
+            )
+        self.assertEqual(result, 2)
+        self.assertIn("destination roots overlap", stderr)
 
 
 if __name__ == "__main__":

@@ -31,8 +31,9 @@ operational memories, and no machine-specific credentials or configuration.
 
 ## Five-minute tour
 
-Requirements: Python 3.11 or newer on Windows, macOS, or Linux. No third-party Python package or
-POSIX shell is required.
+Requirements: Python 3.11 or newer. The dependency-free Python surface is designed for Windows,
+macOS, and Linux; native execution evidence is recorded separately from design compatibility. No
+third-party Python package or POSIX shell is required for the tour.
 
 ```text
 python tools/demo.py
@@ -57,6 +58,7 @@ python tools/test.py
 - `profiles/demo.json`: selected desired state
 - `tools/control.py`: plan, dry-run, scoped apply, verify, and report commands
 - `tools/adopt.py`: dry-run-first Claude Code and Codex starter-bundle builder
+- `tools/bootstrap.py`: mandatory repository-local pre-push gate installer and verifier
 - `tools/verify_release.py`: complete local-only release verification
 - `examples/enforcement/scope_guard.py`: small executable allow/block proof
 - `examples/claude-code/`: Claude Code identity and hook integration guidance

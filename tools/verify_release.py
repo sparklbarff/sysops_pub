@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OPTIONAL_TOOLS = ("black", "ruff", "gitleaks", "shellcheck")
+HOOKS_PATH = ".githooks"
 
 
 def _run(label: str, command: list[str]) -> bool:
@@ -98,6 +100,23 @@ def _no_untracked_files() -> bool:
     return True
 
 
+def _verify_hook_wiring() -> bool:
+    result = subprocess.run(
+        [sys.executable, "tools/bootstrap.py", "--check"],
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    if result.returncode:
+        print("FAIL: mandatory local pre-push gate is not wired", file=sys.stderr)
+        return False
+    hook = REPO_ROOT / HOOKS_PATH / "pre-push"
+    if os.name != "nt" and not os.access(hook, os.X_OK):
+        print("FAIL: mandatory local pre-push hook is not executable", file=sys.stderr)
+        return False
+    print("PASS: mandatory local pre-push gate is wired")
+    return True
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -115,6 +134,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     passed = True
+    passed &= _verify_hook_wiring()
     passed &= _run("dependency-free suite", [sys.executable, "tools/test.py"])
     passed &= _run("case exercises", [sys.executable, "tools/case_exercises.py", "all"])
     passed &= _validate_data_files()
@@ -125,15 +145,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     passed &= _run("staged whitespace", ["git", "diff", "--cached", "--check"])
 
     shell_scripts = [str(path) for path in sorted((REPO_ROOT / "scripts").glob("*.sh"))]
+    shell_scripts.append(str(REPO_ROOT / ".githooks" / "pre-push"))
     tool_commands = {
         "black": ["black", "--check", "."],
         "ruff": ["ruff", "check", "--no-cache", "."],
-        "gitleaks": ["gitleaks", "dir", ".", "--no-banner", "--redact"],
         "shellcheck": ["shellcheck", *shell_scripts],
     }
     for tool in OPTIONAL_TOOLS:
         if shutil.which(tool):
-            passed &= _run(tool, tool_commands[tool])
+            if tool == "gitleaks":
+                passed &= _run(
+                    "gitleaks current tree",
+                    ["gitleaks", "dir", ".", "--no-banner", "--redact"],
+                )
+                passed &= _run(
+                    "gitleaks Git history",
+                    ["gitleaks", "git", ".", "--no-banner", "--redact"],
+                )
+            else:
+                passed &= _run(tool, tool_commands[tool])
         elif args.require_tools:
             print(f"FAIL: required release tool is unavailable: {tool}", file=sys.stderr)
             passed = False

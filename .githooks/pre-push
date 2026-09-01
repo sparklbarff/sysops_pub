@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ -n "${HOME:-}" ]; then
+  PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+else
+  PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+fi
+export PATH
+
+repo_root=$(git rev-parse --show-toplevel)
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$repo_root/tools/verify_release.py" --require-tools
+fi
+if command -v py >/dev/null 2>&1; then
+  exec py -3 "$repo_root/tools/verify_release.py" --require-tools
+fi
+if command -v python >/dev/null 2>&1; then
+  exec python "$repo_root/tools/verify_release.py" --require-tools
+fi
+
+echo "pre-push: Python 3.11 or newer is required" >&2
+exit 2

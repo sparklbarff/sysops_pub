@@ -64,7 +64,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("query")
     parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
     parser.add_argument("--limit", type=int, default=3)
-    parser.add_argument("--requirement-id")
+    parser.add_argument(
+        "--requirement-id",
+        required=True,
+        help="Stable identifier for the requirement that caused this retrieval",
+    )
     return parser
 
 

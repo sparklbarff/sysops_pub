@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 import sys
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -80,6 +82,40 @@ def _sources(tool: str, platform: str) -> list[tuple[Path, Path]]:
     return selected
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _build_bundle(target: Path, sources: list[tuple[Path, Path]]) -> None:
+    if target.exists():
+        raise AdoptionError(f"execution requires a new target path: {target}")
+    if not target.parent.is_dir():
+        raise AdoptionError(f"target parent directory does not exist: {target.parent}")
+    with tempfile.TemporaryDirectory(prefix=f".{target.name}-", dir=target.parent) as directory:
+        staging = Path(directory)
+        for source, relative in sources:
+            destination = staging / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+
+        expected_paths = {relative for _source, relative in sources}
+        actual_paths = {
+            candidate.relative_to(staging)
+            for candidate in staging.rglob("*")
+            if candidate.is_file()
+        }
+        if actual_paths != expected_paths:
+            raise AdoptionError("staged bundle file set does not match the declared sources")
+        for source, relative in sources:
+            if _sha256(source) != _sha256(staging / relative):
+                raise AdoptionError(f"staged bundle hash mismatch: {relative}")
+        staging.replace(target)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", required=True)
@@ -104,22 +140,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         sources = _sources(args.tool, platform)
         if not sources:
             raise AdoptionError("no adoption files were selected")
-        missing = [str(source) for source, _destination in sources if not source.is_file()]
+        missing = [
+            str(source)
+            for source, _destination in sources
+            if not source.is_file() or source.is_symlink()
+        ]
         if missing:
-            raise AdoptionError("missing source file(s): " + ", ".join(missing))
-        if args.execute and target.exists() and any(target.iterdir()):
-            raise AdoptionError(f"execution requires a new or empty target directory: {target}")
+            raise AdoptionError("missing or unsafe source file(s): " + ", ".join(missing))
 
         for source, relative in sources:
-            destination = target / relative
             print(f"{'COPY' if args.execute else 'WOULD COPY':10} {relative}")
-            if args.execute:
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(source, destination)
         if not args.execute:
             print("dry-run only: pass --execute to build the bundle")
         else:
-            print(f"bundle created: {target}")
+            _build_bundle(target, sources)
+            print(f"bundle created and hash-verified: {target}")
         return 0
     except (AdoptionError, OSError) as exc:
         print(f"adopt: {exc}", file=sys.stderr)

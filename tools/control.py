@@ -23,6 +23,7 @@ DEFAULT_REGISTRY = REPO_ROOT / "registry" / "components.json"
 DEFAULT_PROFILE = REPO_ROOT / "profiles" / "demo.json"
 MARKER_NAME = ".sysops_pub_sandbox"
 MARKER_CONTENT = "sysops_pub sandbox v1\n"
+SUPPORTED_PLATFORMS = {"any", "linux", "macos", "windows"}
 
 
 class ControlError(RuntimeError):
@@ -82,6 +83,16 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _current_platform() -> str:
+    if sys.platform == "darwin":
+        return "macos"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    if sys.platform == "win32":
+        return "windows"
+    raise ControlError(f"unsupported host platform: {sys.platform}")
+
+
 def _registry_components(registry_path: Path) -> dict[str, dict[str, Any]]:
     registry = _load_json(registry_path)
     if registry.get("schema_version") != 1:
@@ -99,6 +110,18 @@ def _registry_components(registry_path: Path) -> dict[str, dict[str, Any]]:
             raise ControlError("each registry component needs a non-empty name")
         if name in components:
             raise ControlError(f"duplicate registry component: {name}")
+        platforms = entry.get("platforms")
+        if (
+            not isinstance(platforms, list)
+            or not platforms
+            or not all(isinstance(platform, str) for platform in platforms)
+        ):
+            raise ControlError(f"component platforms must be a non-empty string list: {name}")
+        unknown_platforms = sorted(set(platforms) - SUPPORTED_PLATFORMS)
+        if unknown_platforms:
+            raise ControlError(
+                f"component {name} names unsupported platform(s): " + ", ".join(unknown_platforms)
+            )
         components[name] = entry
     return components
 
@@ -171,11 +194,26 @@ def _managed_files(
     names = _selected_names(profile_path, components, requested)
     managed: list[ManagedFile] = []
     destinations: set[Path] = set()
+    destination_roots: dict[Path, str] = {}
+    current_platform = _current_platform()
 
     for name in names:
         entry = components[name]
+        platforms = entry["platforms"]
+        if "any" not in platforms and current_platform not in platforms:
+            raise ControlError(f"component {name} does not support platform {current_platform}")
         source_rel = _safe_relative(str(entry.get("source", "")), f"{name}.source")
         destination_rel = _safe_relative(str(entry.get("destination", "")), f"{name}.destination")
+        destination_root = target / destination_rel
+        for existing_root, existing_name in destination_roots.items():
+            if _is_within(destination_root, existing_root) or _is_within(
+                existing_root, destination_root
+            ):
+                raise ControlError(
+                    "enabled component destination roots overlap: "
+                    f"{existing_name} ({existing_root}) and {name} ({destination_root})"
+                )
+        destination_roots[destination_root] = name
         source_root = (REPO_ROOT / source_rel).resolve()
         if not _is_within(source_root, REPO_ROOT):
             raise ControlError(f"component source escapes repository: {name}")
@@ -200,7 +238,7 @@ def _managed_files(
                     component=name,
                     source=source,
                     destination=destination,
-                    destination_root=target / destination_rel,
+                    destination_root=destination_root,
                     relative_destination=str(destination.relative_to(target)),
                 )
             )
@@ -315,6 +353,11 @@ def _print_states(states: Sequence[FileState]) -> None:
 def _apply(files: Sequence[ManagedFile], target: Path, execute: bool) -> int:
     before = _states(files, target)
     _print_states(before)
+    unsafe = [state for state in before if state.status in {"unsafe-symlink", "wrong-type"}]
+    if unsafe:
+        paths = ", ".join(state.path for state in unsafe)
+        print(f"control: refusing unsafe destination state(s): {paths}", file=sys.stderr)
+        return 2
     if not execute:
         print("dry-run only: pass --execute to write")
         return 0
@@ -323,8 +366,6 @@ def _apply(files: Sequence[ManagedFile], target: Path, execute: bool) -> int:
     for item, state in zip(files, before, strict=True):
         if state.status == "match":
             continue
-        if state.status in {"unsafe-symlink", "wrong-type"}:
-            raise ControlError(f"refusing unsafe destination state: {item.destination}")
         _check_no_symlink(item.destination.parent, target)
         item.destination.parent.mkdir(parents=True, exist_ok=True)
         _check_no_symlink(item.destination.parent, target)

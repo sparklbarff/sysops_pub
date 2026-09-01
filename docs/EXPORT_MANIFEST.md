@@ -36,12 +36,21 @@ The following must never be copied, even into a private GitHub repository:
 - Scripts that patch protected applications, modify recovery state, delete snapshots, or restore keys
 - Git history from the private repository
 
+Tracked files are UTF-8 text by default. A future binary requires an exact repository-relative
+path, SHA-256, and non-empty reason in `scripts/disclosure_allowlist.json`. A changed hash, stale
+entry, undecodable unlisted file, operational log/database/archive type, or omission-only path
+fails the disclosure scan.
+
+The repository's own clone coordinate is the one allowed account-name exception because it is
+required to identify this repository. It does not permit usernames elsewhere in content or paths.
+
 ## Review gates
 
 Before every push:
 
 1. Run `python tools/verify_release.py --require-tools`.
-2. Confirm the tracked-file disclosure scan and gitleaks both pass.
+2. Confirm the tracked-file disclosure scan and both current-tree and Git-history gitleaks scans
+   pass.
 3. Confirm every tracked symlink remains inside the repository.
 4. Confirm generated reports and demo sandboxes are absent or empty.
 5. Review the complete staged diff, not only the commit summary.

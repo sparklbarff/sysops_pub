@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -39,6 +41,32 @@ class SearchDocsTests(unittest.TestCase):
             document.write_text("alpha state changed\n", encoding="utf-8")
             second = search_docs.retrieve("alpha", corpus)["corpus_digest"]
             self.assertNotEqual(first, second)
+
+    def test_cli_requires_and_records_requirement_identity(self) -> None:
+        script = ROOT / "tools" / "search_docs.py"
+        missing = subprocess.run(
+            [sys.executable, str(script), "desired state"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn("--requirement-id", missing.stderr)
+
+        recorded = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "desired state",
+                "--requirement-id",
+                "test-requirement-001",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(recorded.returncode, 0, recorded.stderr)
+        self.assertEqual(json.loads(recorded.stdout)["requirement_id"], "test-requirement-001")
 
 
 if __name__ == "__main__":

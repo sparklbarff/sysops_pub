@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -11,7 +12,47 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWLIST_PATH = ROOT / "scripts" / "disclosure_allowlist.json"
-OMISSION_BASENAMES = {"MEMORY.md", ".remember", "secrets"}
+OMISSION_NAMES = {
+    ".remember",
+    "handoff.md",
+    "memory.md",
+    "secrets",
+    "session.md",
+    "transcript.md",
+}
+OMISSION_DIRECTORIES = {
+    "indexes",
+    "logs",
+    "model-cache",
+    "reports",
+    "secrets",
+    "sessions",
+    "transcripts",
+}
+OMISSION_SUFFIXES = {
+    ".7z",
+    ".arrow",
+    ".bin",
+    ".db",
+    ".duckdb",
+    ".faiss",
+    ".gz",
+    ".index",
+    ".jsonl",
+    ".key",
+    ".log",
+    ".npy",
+    ".npz",
+    ".p12",
+    ".parquet",
+    ".pem",
+    ".pickle",
+    ".pkl",
+    ".sqlite",
+    ".sqlite3",
+    ".tar",
+    ".zip",
+}
 TEXT_PATTERNS = {
     "macOS user path": re.compile(r"/Users/[A-Za-z0-9._-]+"),
     "Linux user path": re.compile(r"/home/[A-Za-z0-9._-]+"),
@@ -60,27 +101,58 @@ def _tracked_files() -> list[Path]:
     return sorted(found)
 
 
-def _allowlist() -> set[str]:
+def _is_text(text: str) -> bool:
+    return all(character in "\n\r\t" or character.isprintable() for character in text)
+
+
+def _allowlist() -> tuple[set[str], dict[str, dict[str, str]]]:
     try:
         value = json.loads(ALLOWLIST_PATH.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         raise ScanError(f"invalid disclosure allowlist: {exc}") from exc
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
-        raise ScanError("disclosure allowlist schema_version must be 1")
+    if not isinstance(value, dict) or value.get("schema_version") != 2:
+        raise ScanError("disclosure allowlist schema_version must be 2")
     findings = value.get("findings")
     if not isinstance(findings, list) or not all(isinstance(item, str) for item in findings):
         raise ScanError("disclosure allowlist findings must be a list of strings")
-    return set(findings)
+    binaries = value.get("binary_files")
+    if not isinstance(binaries, list):
+        raise ScanError("disclosure allowlist binary_files must be a list")
+    binary_files: dict[str, dict[str, str]] = {}
+    for entry in binaries:
+        if not isinstance(entry, dict) or set(entry) != {"path", "sha256", "reason"}:
+            raise ScanError("each binary_files entry needs path, sha256, and reason")
+        path = entry["path"]
+        sha256 = entry["sha256"]
+        reason = entry["reason"]
+        if not all(isinstance(item, str) and item for item in (path, sha256, reason)):
+            raise ScanError("binary_files path, sha256, and reason must be non-empty strings")
+        relative = Path(path)
+        if relative.is_absolute() or ".." in relative.parts or str(relative) != path:
+            raise ScanError(f"binary_files path must be an exact safe relative path: {path!r}")
+        if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+            raise ScanError(f"binary_files sha256 must be lowercase hexadecimal: {path}")
+        if path in binary_files:
+            raise ScanError(f"duplicate binary_files path: {path}")
+        binary_files[path] = {"sha256": sha256, "reason": reason}
+    return set(findings), binary_files
 
 
 def scan() -> list[str]:
-    allowlist = _allowlist()
+    allowlist, binary_allowlist = _allowlist()
     findings: list[str] = []
     seen_findings: set[str] = set()
+    seen_binaries: set[str] = set()
     for path in _tracked_files():
         relative = path.relative_to(ROOT)
-        if any(part in OMISSION_BASENAMES for part in relative.parts):
+        relative_string = str(relative)
+        lowered_parts = [part.casefold() for part in relative.parts]
+        if any(part in OMISSION_NAMES for part in lowered_parts):
             findings.append(f"{relative}: omission-only path is tracked")
+        elif any(part in OMISSION_DIRECTORIES for part in lowered_parts[:-1]):
+            findings.append(f"{relative}: omission-only directory is tracked")
+        if relative.suffix.casefold() in OMISSION_SUFFIXES:
+            findings.append(f"{relative}: omission-only file type is tracked")
         if path.is_symlink():
             resolved = path.resolve()
             try:
@@ -89,9 +161,27 @@ def scan() -> list[str]:
                 findings.append(f"{relative}: symlink escapes repository -> {resolved}")
             continue
         try:
-            text = path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
+            content = path.read_bytes()
+        except OSError as exc:
+            findings.append(f"{relative}: could not read tracked file: {exc}")
             continue
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            text = None
+        if text is None or not _is_text(text):
+            binary_entry = binary_allowlist.get(relative_string)
+            if binary_entry is None:
+                findings.append(f"{relative}: non-text file is not binary-allowlisted")
+                continue
+            seen_binaries.add(relative_string)
+            actual_sha256 = hashlib.sha256(content).hexdigest()
+            if actual_sha256 != binary_entry["sha256"]:
+                findings.append(f"{relative}: binary allowlist SHA-256 mismatch")
+            continue
+        if relative_string in binary_allowlist:
+            seen_binaries.add(relative_string)
+            findings.append(f"{relative}: binary allowlist entry points to a UTF-8 text file")
         for label, pattern in TEXT_PATTERNS.items():
             for match in pattern.finditer(text):
                 line = text.count("\n", 0, match.start()) + 1
@@ -101,6 +191,8 @@ def scan() -> list[str]:
                     findings.append(finding)
     unused = sorted(allowlist - seen_findings)
     findings.extend(f"allowlist entry is stale: {entry}" for entry in unused)
+    unused_binaries = sorted(set(binary_allowlist) - seen_binaries)
+    findings.extend(f"binary allowlist entry is stale: {entry}" for entry in unused_binaries)
     return findings
 
 
