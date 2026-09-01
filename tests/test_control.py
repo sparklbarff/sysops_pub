@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -32,6 +33,20 @@ class ControlLoopTests(unittest.TestCase):
     def initialize(self) -> None:
         result, _stdout, stderr = self.run_control("init", "--target", str(self.target))
         self.assertEqual(result, 0, stderr)
+
+    def write_profile(self, components: dict[str, object]) -> Path:
+        profile = Path(self.temporary.name) / "profile.json"
+        profile.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "name": "test-profile",
+                    "components": components,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return profile
 
     def test_dry_run_does_not_write_managed_files(self) -> None:
         self.initialize()
@@ -135,6 +150,81 @@ class ControlLoopTests(unittest.TestCase):
         report = json.loads(stdout)
         self.assertEqual(report["summary"], {"missing": 2})
         self.assertEqual(len(report["files"]), 2)
+
+    def test_profile_rejects_non_boolean_enabled_value(self) -> None:
+        profile = self.write_profile({"agent-policy": {"enabled": "true"}})
+        self.initialize()
+        result, _stdout, stderr = self.run_control(
+            "--profile", str(profile), "verify", "--target", str(self.target)
+        )
+        self.assertEqual(result, 2)
+        self.assertIn("enabled must be a boolean", stderr)
+
+    def test_profile_rejects_zero_enabled_components(self) -> None:
+        profile = self.write_profile({"agent-policy": {"enabled": False}})
+        self.initialize()
+        result, _stdout, stderr = self.run_control(
+            "--profile", str(profile), "verify", "--target", str(self.target)
+        )
+        self.assertEqual(result, 2)
+        self.assertIn("must enable at least one", stderr)
+
+    def test_enabled_component_rejects_empty_source(self) -> None:
+        fixture_root = Path(self.temporary.name) / "fixture-repository"
+        source = fixture_root / "components" / "empty" / "desired"
+        source.mkdir(parents=True)
+        fixture_root = fixture_root.resolve()
+        registry = fixture_root / "registry.json"
+        registry.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "components": [
+                        {
+                            "name": "empty",
+                            "source": "components/empty/desired",
+                            "destination": ".config/empty",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        profile = self.write_profile({"empty": {"enabled": True}})
+        self.initialize()
+        with mock.patch.object(control, "REPO_ROOT", fixture_root):
+            result, _stdout, stderr = self.run_control(
+                "--registry",
+                str(registry),
+                "--profile",
+                str(profile),
+                "verify",
+                "--target",
+                str(self.target),
+            )
+        self.assertEqual(result, 2)
+        self.assertIn("has no managed files", stderr)
+
+    def test_report_discovers_unmanaged_files_without_failing_verify(self) -> None:
+        self.initialize()
+        self.assertEqual(self.run_control("apply", "--target", str(self.target), "--execute")[0], 0)
+        unmanaged = self.target / ".config" / "sysops_pub" / "shell-banner" / "extra.txt"
+        unmanaged.write_text("not declared\n", encoding="utf-8")
+
+        verify_result, _stdout, stderr = self.run_control("verify", "--target", str(self.target))
+        self.assertEqual(verify_result, 0, stderr)
+        report_result, stdout, stderr = self.run_control(
+            "report", "--target", str(self.target), "--json"
+        )
+        self.assertEqual(report_result, 0, stderr)
+        report = json.loads(stdout)
+        self.assertEqual(report["summary"], {"match": 2, "unmanaged": 1})
+        unmanaged_rows = [row for row in report["files"] if row["status"] == "unmanaged"]
+        self.assertEqual(len(unmanaged_rows), 1)
+        self.assertEqual(
+            unmanaged_rows[0]["path"],
+            ".config/sysops_pub/shell-banner/extra.txt",
+        )
 
 
 if __name__ == "__main__":

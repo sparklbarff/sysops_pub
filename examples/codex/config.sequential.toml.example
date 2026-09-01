@@ -1,0 +1,3 @@
+# Optional workflow preference. This is not a sandbox security control.
+[agents]
+enabled = false

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -63,6 +65,52 @@ class ScopeGuardTests(unittest.TestCase):
         self.assertIn("ALLOWED", admitted.stdout)
         self.assertEqual(blocked.returncode, 2, blocked.stdout)
         self.assertIn("BLOCKED", blocked.stderr)
+
+    def run_hook(self, script: Path, root: Path, payload: str) -> subprocess.CompletedProcess[str]:
+        environment = os.environ.copy()
+        environment["CLAUDE_PROJECT_DIR"] = str(root)
+        return subprocess.run(
+            [sys.executable, str(script), "--claude-hook"],
+            input=payload,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+
+    def test_hook_process_blocks_and_admits_real_payloads(self) -> None:
+        script = ROOT / "examples" / "enforcement" / "scope_guard.py"
+        with tempfile.TemporaryDirectory(prefix="scope-guard-hook-") as directory:
+            root = Path(directory) / "project"
+            root.mkdir()
+            admitted = self.run_hook(
+                script,
+                root,
+                json.dumps({"tool_input": {"file_path": str(root / "inside.md")}}),
+            )
+            blocked = self.run_hook(
+                script,
+                root,
+                json.dumps({"tool_input": {"file_path": str(Path(directory) / "outside.md")}}),
+            )
+        self.assertEqual(admitted.returncode, 0, admitted.stderr)
+        self.assertIn("ALLOWED", admitted.stdout)
+        self.assertEqual(blocked.returncode, 2, blocked.stdout)
+        self.assertIn("BLOCKED", blocked.stderr)
+
+    def test_hook_process_fails_closed_without_path(self) -> None:
+        script = ROOT / "examples" / "enforcement" / "scope_guard.py"
+        with tempfile.TemporaryDirectory(prefix="scope-guard-hook-") as directory:
+            result = self.run_hook(script, Path(directory), json.dumps({"tool_input": {}}))
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("no supported write path", result.stderr)
+
+    def test_hook_process_fails_closed_on_invalid_json(self) -> None:
+        script = ROOT / "examples" / "enforcement" / "scope_guard.py"
+        with tempfile.TemporaryDirectory(prefix="scope-guard-hook-") as directory:
+            result = self.run_hook(script, Path(directory), "not-json")
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("invalid hook JSON", result.stderr)
 
 
 if __name__ == "__main__":

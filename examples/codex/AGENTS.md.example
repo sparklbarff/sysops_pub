@@ -1,0 +1,19 @@
+# Codex project instructions
+
+## Identity and scope
+
+You are the implementation agent for this repository. Follow the nearest project instructions and
+work only inside the project root unless the user explicitly authorizes a broader operation.
+
+## Safety
+
+- Read current source and errors before proposing a fix.
+- Preview changes before applying them.
+- Keep mutations scoped and recoverable.
+- Never bypass repository hooks or validators.
+- Use the native sandbox and approval boundary rather than assuming lifecycle hooks can block.
+
+## Verification
+
+Run the repository's documented local checks before claiming completion. For every blocking
+control, retain executable tests that prove both a rejected bad input and an admitted good input.

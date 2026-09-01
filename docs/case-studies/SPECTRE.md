@@ -20,3 +20,11 @@ the prior cohort was also red. The governance correction was:
 
 The lesson is that artifact existence, aggregate stability, and a plausible narrative do not
 override a declared acceptance gate.
+
+Run the synthetic classifier exercise from the repository root:
+
+```sh
+python tools/case_exercises.py spectre
+```
+
+On Windows, use `py -3` in place of `python` when that is your installed launcher.

@@ -31,11 +31,15 @@ operational memories, and no machine-specific credentials or configuration.
 
 ## Five-minute tour
 
-Requirements: Python 3.11 or newer and a POSIX shell.
+Requirements: Python 3.11 or newer on Windows, macOS, or Linux. No third-party Python package or
+POSIX shell is required.
 
-```sh
-./scripts/demo.sh
+```text
+python tools/demo.py
 ```
+
+Use `python3` on macOS or Linux, or `py -3` on Windows, when that is your installed launcher. See
+`docs/QUICKSTART.md` for exact clone, tour, test, and adoption commands.
 
 The demo creates a temporary marked sandbox, previews two declared components, applies them,
 verifies the result, introduces drift, detects it, repairs it, and emits a final status report. It
@@ -43,8 +47,8 @@ does not write to your home directory or change operating-system settings.
 
 Run the local test suite:
 
-```sh
-./scripts/test.sh
+```text
+python tools/test.py
 ```
 
 ## Repository map
@@ -52,6 +56,8 @@ Run the local test suite:
 - `registry/components.json`: single source of truth for available demo components
 - `profiles/demo.json`: selected desired state
 - `tools/control.py`: plan, dry-run, scoped apply, verify, and report commands
+- `tools/adopt.py`: dry-run-first Claude Code and Codex starter-bundle builder
+- `tools/verify_release.py`: complete local-only release verification
 - `examples/enforcement/scope_guard.py`: small executable allow/block proof
 - `examples/claude-code/`: Claude Code identity and hook integration guidance
 - `examples/codex/`: Codex identity and sandbox integration guidance
@@ -68,7 +74,7 @@ The demo controller:
 - rejects absolute and parent-traversing registry paths;
 - refuses symlinks on managed source and destination paths;
 - previews by default and requires `--execute` to write;
-- never deletes unmanaged files.
+- reports but never deletes unmanaged files.
 
 Read `docs/SECURITY_BOUNDARY.md` before adapting it to a real machine.
 

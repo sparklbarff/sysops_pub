@@ -2,4 +2,4 @@
 set -eu
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-exec python3 "$repo_root/tools/test.py"
+exec python3 "$repo_root/tools/verify_release.py" --require-tools

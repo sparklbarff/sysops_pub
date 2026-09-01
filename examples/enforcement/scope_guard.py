@@ -54,8 +54,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         candidate = _claude_path(payload)
         if candidate is None:
-            return 0
-        root = args.root or Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd()))
+            print("scope_guard: hook payload has no supported write path", file=sys.stderr)
+            return 2
+        if args.root is not None:
+            root = args.root
+        else:
+            project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
+            if not project_dir:
+                print("scope_guard: CLAUDE_PROJECT_DIR is required in hook mode", file=sys.stderr)
+                return 2
+            root = Path(project_dir)
     else:
         if args.root is None or args.path is None:
             print("scope_guard: --root and --path are required outside hook mode", file=sys.stderr)

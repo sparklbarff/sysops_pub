@@ -1,0 +1,29 @@
+{
+  "runner_name": "EidolonTests",
+  "rows": [
+    {
+      "command": "sleep 10",
+      "is_test_run": false
+    },
+    {
+      "command": "uptime",
+      "is_test_run": false
+    },
+    {
+      "command": "pgrep EidolonTests",
+      "is_test_run": false
+    },
+    {
+      "command": "sed -n 1,20p EidolonTests.log",
+      "is_test_run": false
+    },
+    {
+      "command": "while pgrep EidolonTests; do sleep 5; done; cd build && ./EidolonTests",
+      "is_test_run": true
+    },
+    {
+      "command": "./EidolonTests --unit",
+      "is_test_run": true
+    }
+  ]
+}

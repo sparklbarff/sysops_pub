@@ -40,9 +40,8 @@ The following must never be copied, even into a private GitHub repository:
 
 Before every push:
 
-1. Run the local tests.
-2. Search tracked content for personal paths and identifiers.
-3. Run a secret scanner when available.
-4. Inspect every tracked symlink and reject links outside this repository.
-5. Confirm generated reports and demo sandboxes are untracked.
-6. Review the complete staged diff, not only the commit summary.
+1. Run `python tools/verify_release.py --require-tools`.
+2. Confirm the tracked-file disclosure scan and gitleaks both pass.
+3. Confirm every tracked symlink remains inside the repository.
+4. Confirm generated reports and demo sandboxes are absent or empty.
+5. Review the complete staged diff, not only the commit summary.

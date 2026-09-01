@@ -2,6 +2,10 @@
 
 Start by running the sandbox demo unchanged. Then adapt one component at a time.
 
+Use `tools/adopt.py` to create a reviewable starter bundle outside this repository. It previews by
+default, requires `--execute` to copy, refuses non-empty targets, and never writes directly into
+live Claude Code, Codex, or home configuration.
+
 ## Add a component
 
 1. Create a directory under `components/<name>/desired/`.
@@ -10,6 +14,7 @@ Start by running the sandbox demo unchanged. Then adapt one component at a time.
 4. Enable it in a profile.
 5. Run `plan` and confirm the destination is correct.
 6. Add a test that proves missing, matching, and drifted states.
+7. Confirm the status report identifies unmanaged files without deleting them.
 
 The reference controller manages files only. Real package managers, macOS defaults, services, and
 credential systems need dedicated adapters and stronger recovery plans.

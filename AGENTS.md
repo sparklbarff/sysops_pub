@@ -35,5 +35,8 @@ Out of scope:
 Run:
 
 ```sh
-./scripts/test.sh
+python tools/test.py
 ```
+
+Before a release or push, run `python tools/verify_release.py --require-tools` and review the full
+staged diff. These are local gates; this repository does not require hosted CI.

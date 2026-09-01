@@ -34,6 +34,7 @@ class ManagedFile:
     component: str
     source: Path
     destination: Path
+    destination_root: Path
     relative_destination: str
 
 
@@ -42,7 +43,7 @@ class FileState:
     component: str
     path: str
     status: str
-    expected_sha256: str
+    expected_sha256: str | None
     actual_sha256: str | None
 
 
@@ -118,11 +119,20 @@ def _selected_names(
     if unknown:
         raise ControlError(f"profile names unknown component(s): {', '.join(unknown)}")
 
-    enabled = [
-        name
-        for name, settings in configured.items()
-        if isinstance(settings, dict) and settings.get("enabled") is True
-    ]
+    enabled: list[str] = []
+    for name, settings in configured.items():
+        if not isinstance(settings, dict):
+            raise ControlError(f"profile component settings must be an object: {name}")
+        unknown_settings = sorted(set(settings) - {"enabled"})
+        if unknown_settings:
+            raise ControlError(
+                f"profile component {name} has unknown setting(s): " + ", ".join(unknown_settings)
+            )
+        is_enabled = settings.get("enabled")
+        if not isinstance(is_enabled, bool):
+            raise ControlError(f"profile component enabled must be a boolean: {name}")
+        if is_enabled:
+            enabled.append(name)
     if requested:
         missing = sorted(set(requested) - set(enabled))
         if missing:
@@ -130,7 +140,12 @@ def _selected_names(
                 "requested component(s) are absent or disabled in the profile: "
                 + ", ".join(missing)
             )
-        return list(dict.fromkeys(requested))
+        selected = list(dict.fromkeys(requested))
+        if not selected:
+            raise ControlError("at least one component must be selected")
+        return selected
+    if not enabled:
+        raise ControlError("profile must enable at least one component")
     return enabled
 
 
@@ -168,11 +183,13 @@ def _managed_files(
             raise ControlError(f"component source is not a directory: {source_root}")
         _check_no_symlink(source_root, REPO_ROOT)
 
+        component_file_count = 0
         for source in sorted(source_root.rglob("*")):
             if source.is_symlink():
                 raise ControlError(f"component source may not contain symlinks: {source}")
             if not source.is_file():
                 continue
+            component_file_count += 1
             relative = source.relative_to(source_root)
             destination = target / destination_rel / relative
             if destination in destinations:
@@ -183,9 +200,12 @@ def _managed_files(
                     component=name,
                     source=source,
                     destination=destination,
+                    destination_root=target / destination_rel,
                     relative_destination=str(destination.relative_to(target)),
                 )
             )
+        if component_file_count == 0:
+            raise ControlError(f"enabled component has no managed files: {name}")
     return managed
 
 
@@ -215,6 +235,38 @@ def _states(files: Iterable[ManagedFile], target: Path) -> list[FileState]:
                 actual_sha256=actual,
             )
         )
+    return states
+
+
+def _unmanaged_states(files: Sequence[ManagedFile], target: Path) -> list[FileState]:
+    managed_paths = {item.destination for item in files}
+    roots = {(item.component, item.destination_root) for item in files}
+    states: list[FileState] = []
+    for component, root in sorted(roots, key=lambda item: (item[0], str(item[1]))):
+        if not root.exists() or not root.is_dir():
+            continue
+        _check_no_symlink(root, target)
+        for candidate in sorted(root.rglob("*")):
+            if candidate in managed_paths:
+                continue
+            if candidate.is_symlink():
+                actual = None
+            elif candidate.is_dir():
+                continue
+            elif candidate.is_file():
+                _check_no_symlink(candidate, target)
+                actual = _sha256(candidate)
+            else:
+                continue
+            states.append(
+                FileState(
+                    component=component,
+                    path=str(candidate.relative_to(target)),
+                    status="unmanaged",
+                    expected_sha256=None,
+                    actual_sha256=actual,
+                )
+            )
     return states
 
 
@@ -372,7 +424,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _print_states(states)
             return 0 if all(state.status == "match" for state in states) else 1
         if args.command == "report":
-            _report(states, target, args.json)
+            _report(states + _unmanaged_states(files, target), target, args.json)
             return 0
         raise ControlError(f"unknown command: {args.command}")
     except ControlError as exc:

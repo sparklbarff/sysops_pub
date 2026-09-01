@@ -20,3 +20,12 @@ The safe repair pattern is:
 
 The lesson is to bind evidence to the subject that actually ran. Filtering by the first word or by
 substring presence can both create false confidence.
+
+Run the synthetic counterexample exercise from the repository root:
+
+```sh
+python tools/case_exercises.py eidolon
+```
+
+The exercise intentionally demonstrates failures in both naive heuristics. It does not claim to
+solve shell parsing. On Windows, use `py -3` in place of `python` when needed.
