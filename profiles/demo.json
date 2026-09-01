@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "name": "sandbox-demo",
+  "components": {
+    "agent-policy": {
+      "enabled": true
+    },
+    "shell-banner": {
+      "enabled": true
+    }
+  }
+}

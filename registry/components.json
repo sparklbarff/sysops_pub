@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "components": [
+    {
+      "name": "agent-policy",
+      "description": "Example repository-local agent identity and scope policy",
+      "source": "components/agent-policy/desired",
+      "destination": ".config/sysops_pub/agent-policy",
+      "platforms": ["any"]
+    },
+    {
+      "name": "shell-banner",
+      "description": "Harmless text fixture representing a managed shell fragment",
+      "source": "components/shell-banner/desired",
+      "destination": ".config/sysops_pub/shell-banner",
+      "platforms": ["any"]
+    }
+  ]
+}
