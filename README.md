@@ -67,6 +67,7 @@ python tools/test.py
 - `samples/rag/`: synthetic corpus and a deterministic retrieval-contract example
 - `docs/case-studies/`: sanitized Spectre and Eidolon incidents
 - `docs/EXPORT_MANIFEST.md`: what may and may not cross from the private system
+- `docs/CAPABILITY_MATRIX.md`: exact private-to-reference coverage and intentional omissions
 
 ## Safety model
 
