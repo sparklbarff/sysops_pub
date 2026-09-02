@@ -32,8 +32,9 @@ operational memories, and no machine-specific credentials or configuration.
 ## Five-minute tour
 
 Requirements: Python 3.11 or newer. The dependency-free Python surface is designed for Windows,
-macOS, and Linux; native execution evidence is recorded separately from design compatibility. No
-third-party Python package or POSIX shell is required for the tour.
+macOS, and Linux. The current evidence matrix distinguishes native execution from design
+compatibility in `docs/QUICKSTART.md`. No third-party Python package or POSIX shell is required for
+the tour.
 
 ```text
 python tools/demo.py

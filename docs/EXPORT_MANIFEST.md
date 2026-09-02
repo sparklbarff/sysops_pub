@@ -25,7 +25,7 @@ repository. Nothing crosses merely because it is tracked or technically reusable
 The following must never be copied, even into a private GitHub repository:
 
 - `secrets/` and all key, certificate, credential, token, vault, and recovery material
-- Password-store contents and GPG identifiers
+- Password-store contents and private key material
 - User memories, session handoffs, transcripts, and task state
 - Hook logs, analytics databases, test ledgers, receipts tied to real sessions, and generated reports
 - Absolute personal paths, usernames, email addresses, hostnames, IP addresses, device identifiers,
@@ -39,10 +39,14 @@ The following must never be copied, even into a private GitHub repository:
 Tracked files are UTF-8 text by default. A future binary requires an exact repository-relative
 path, SHA-256, and non-empty reason in `scripts/disclosure_allowlist.json`. A changed hash, stale
 entry, undecodable unlisted file, operational log/database/archive type, or omission-only path
-fails the disclosure scan.
+fails the disclosure scan. A deliberately synthetic case fixture with an otherwise forbidden
+operational filename requires the same exact path, hash, and reason binding.
 
-The repository's own clone coordinate is the one allowed account-name exception because it is
-required to identify this repository. It does not permit usernames elsewhere in content or paths.
+Git commit metadata has one narrow exception: collaborators' GitHub account names, GitHub noreply
+addresses, and cryptographic commit signatures may appear in author, committer, and signature
+fields. They are repository provenance, not exported sysops data. The repository clone coordinate
+is also allowed because it identifies this repository. Neither exception permits those identifiers
+in tracked content, paths, examples, or operational data.
 
 ## Review gates
 
@@ -50,7 +54,9 @@ Before every push:
 
 1. Run `python tools/verify_release.py --require-tools`.
 2. Confirm the tracked-file disclosure scan and both current-tree and Git-history gitleaks scans
-   pass.
+   pass. The disclosure scan also requires GitHub noreply author and committer addresses throughout
+   repository history.
 3. Confirm every tracked symlink remains inside the repository.
 4. Confirm generated reports and demo sandboxes are absent or empty.
-5. Review the complete staged diff, not only the commit summary.
+5. Review the complete candidate diff before committing and the complete outgoing commit range
+   before pushing, not only the commit summary.

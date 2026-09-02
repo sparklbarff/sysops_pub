@@ -20,6 +20,8 @@ class SearchDocsTests(unittest.TestCase):
             ROOT / "samples" / "rag" / "corpus",
         )
         self.assertEqual(receipt["outcome"], "answered")
+        self.assertEqual(receipt["receipt_schema_version"], 1)
+        self.assertEqual(receipt["retriever_id"], "token-overlap-set-v1")
         self.assertEqual(len(receipt["corpus_digest"]), 64)
         self.assertTrue(receipt["sources"])
         self.assertIn("path", receipt["sources"][0])
@@ -67,6 +69,21 @@ class SearchDocsTests(unittest.TestCase):
         )
         self.assertEqual(recorded.returncode, 0, recorded.stderr)
         self.assertEqual(json.loads(recorded.stdout)["requirement_id"], "test-requirement-001")
+
+        blank = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "desired state",
+                "--requirement-id",
+                "   ",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(blank.returncode, 2)
+        self.assertIn("must not be blank", blank.stderr)
 
 
 if __name__ == "__main__":

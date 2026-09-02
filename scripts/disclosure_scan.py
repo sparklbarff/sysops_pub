@@ -53,10 +53,21 @@ OMISSION_SUFFIXES = {
     ".tar",
     ".zip",
 }
+OMISSION_BASENAME_PATTERN = re.compile(
+    r"(?:^|[-_.])(?:handoffs?|ledgers?|logs?|memories|memory|metrics?|reports?|sessions?|"
+    r"task[-_]?state|transcripts?)(?:$|[-_.0-9])"
+)
+GITHUB_NOREPLY_PATTERN = re.compile(
+    r"^(?:[0-9]+\+)?[A-Za-z0-9-]+@users\.noreply\.github\.com$",
+    re.IGNORECASE,
+)
 TEXT_PATTERNS = {
     "macOS user path": re.compile(r"/Users/[A-Za-z0-9._-]+"),
     "Linux user path": re.compile(r"/home/[A-Za-z0-9._-]+"),
-    "Windows user path": re.compile(r"[A-Za-z]:\\Users\\[A-Za-z0-9._-]+"),
+    "Windows user path": re.compile(
+        r"[A-Za-z]:(?:\\+|/+)Users(?:\\+|/+)[A-Za-z0-9._-]+",
+        re.IGNORECASE,
+    ),
     "external volume path": re.compile(r"/Volumes/[A-Za-z0-9._-][^\s`]*"),
     "private key": re.compile(r"BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY"),
     "GitHub token": re.compile(r"\b(?:ghp|github_pat)_[A-Za-z0-9_]{20,}\b"),
@@ -105,54 +116,63 @@ def _is_text(text: str) -> bool:
     return all(character in "\n\r\t" or character.isprintable() for character in text)
 
 
-def _allowlist() -> tuple[set[str], dict[str, dict[str, str]]]:
-    try:
-        value = json.loads(ALLOWLIST_PATH.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError) as exc:
-        raise ScanError(f"invalid disclosure allowlist: {exc}") from exc
-    if not isinstance(value, dict) or value.get("schema_version") != 2:
-        raise ScanError("disclosure allowlist schema_version must be 2")
-    findings = value.get("findings")
-    if not isinstance(findings, list) or not all(isinstance(item, str) for item in findings):
-        raise ScanError("disclosure allowlist findings must be a list of strings")
-    binaries = value.get("binary_files")
-    if not isinstance(binaries, list):
-        raise ScanError("disclosure allowlist binary_files must be a list")
-    binary_files: dict[str, dict[str, str]] = {}
-    for entry in binaries:
+def _hash_bound_entries(value: object, label: str) -> dict[str, dict[str, str]]:
+    if not isinstance(value, list):
+        raise ScanError(f"disclosure allowlist {label} must be a list")
+    entries: dict[str, dict[str, str]] = {}
+    for entry in value:
         if not isinstance(entry, dict) or set(entry) != {"path", "sha256", "reason"}:
-            raise ScanError("each binary_files entry needs path, sha256, and reason")
+            raise ScanError(f"each {label} entry needs path, sha256, and reason")
         path = entry["path"]
         sha256 = entry["sha256"]
         reason = entry["reason"]
         if not all(isinstance(item, str) and item for item in (path, sha256, reason)):
-            raise ScanError("binary_files path, sha256, and reason must be non-empty strings")
+            raise ScanError(f"{label} path, sha256, and reason must be non-empty strings")
         relative = Path(path)
         if relative.is_absolute() or ".." in relative.parts or str(relative) != path:
-            raise ScanError(f"binary_files path must be an exact safe relative path: {path!r}")
+            raise ScanError(f"{label} path must be an exact safe relative path: {path!r}")
         if not re.fullmatch(r"[0-9a-f]{64}", sha256):
-            raise ScanError(f"binary_files sha256 must be lowercase hexadecimal: {path}")
-        if path in binary_files:
-            raise ScanError(f"duplicate binary_files path: {path}")
-        binary_files[path] = {"sha256": sha256, "reason": reason}
-    return set(findings), binary_files
+            raise ScanError(f"{label} sha256 must be lowercase hexadecimal: {path}")
+        if path in entries:
+            raise ScanError(f"duplicate {label} path: {path}")
+        entries[path] = {"sha256": sha256, "reason": reason}
+    return entries
+
+
+def _allowlist() -> tuple[set[str], dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+    try:
+        value = json.loads(ALLOWLIST_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        raise ScanError(f"invalid disclosure allowlist: {exc}") from exc
+    if not isinstance(value, dict) or value.get("schema_version") != 3:
+        raise ScanError("disclosure allowlist schema_version must be 3")
+    findings = value.get("findings")
+    if not isinstance(findings, list) or not all(isinstance(item, str) for item in findings):
+        raise ScanError("disclosure allowlist findings must be a list of strings")
+    binary_files = _hash_bound_entries(value.get("binary_files"), "binary_files")
+    omission_files = _hash_bound_entries(value.get("omission_files"), "omission_files")
+    return set(findings), binary_files, omission_files
 
 
 def scan() -> list[str]:
-    allowlist, binary_allowlist = _allowlist()
+    allowlist, binary_allowlist, omission_allowlist = _allowlist()
     findings: list[str] = []
     seen_findings: set[str] = set()
     seen_binaries: set[str] = set()
+    seen_omissions: set[str] = set()
     for path in _tracked_files():
         relative = path.relative_to(ROOT)
         relative_string = str(relative)
         lowered_parts = [part.casefold() for part in relative.parts]
+        omission_reasons: list[str] = []
         if any(part in OMISSION_NAMES for part in lowered_parts):
-            findings.append(f"{relative}: omission-only path is tracked")
+            omission_reasons.append("omission-only path")
         elif any(part in OMISSION_DIRECTORIES for part in lowered_parts[:-1]):
-            findings.append(f"{relative}: omission-only directory is tracked")
+            omission_reasons.append("omission-only directory")
+        elif OMISSION_BASENAME_PATTERN.search(relative.stem.casefold()):
+            omission_reasons.append("omission-only artifact name")
         if relative.suffix.casefold() in OMISSION_SUFFIXES:
-            findings.append(f"{relative}: omission-only file type is tracked")
+            omission_reasons.append("omission-only file type")
         if path.is_symlink():
             resolved = path.resolve()
             try:
@@ -165,6 +185,15 @@ def scan() -> list[str]:
         except OSError as exc:
             findings.append(f"{relative}: could not read tracked file: {exc}")
             continue
+        if omission_reasons:
+            omission_entry = omission_allowlist.get(relative_string)
+            if omission_entry is None:
+                findings.extend(f"{relative}: {reason} is tracked" for reason in omission_reasons)
+            else:
+                seen_omissions.add(relative_string)
+                actual_sha256 = hashlib.sha256(content).hexdigest()
+                if actual_sha256 != omission_entry["sha256"]:
+                    findings.append(f"{relative}: omission allowlist SHA-256 mismatch")
         try:
             text = content.decode("utf-8")
         except UnicodeDecodeError:
@@ -193,12 +222,48 @@ def scan() -> list[str]:
     findings.extend(f"allowlist entry is stale: {entry}" for entry in unused)
     unused_binaries = sorted(set(binary_allowlist) - seen_binaries)
     findings.extend(f"binary allowlist entry is stale: {entry}" for entry in unused_binaries)
+    unused_omissions = sorted(set(omission_allowlist) - seen_omissions)
+    findings.extend(f"omission allowlist entry is stale: {entry}" for entry in unused_omissions)
+    return findings
+
+
+def _history_metadata_findings() -> list[str]:
+    result = subprocess.run(
+        ["git", "log", "HEAD", "--format=%H%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1e"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        raise ScanError("git log failed; commit identity metadata could not be audited")
+    findings: list[str] = []
+    for raw_record in result.stdout.split("\x1e"):
+        record = raw_record.strip("\r\n")
+        if not record:
+            continue
+        fields = record.split("\x1f")
+        if len(fields) != 5:
+            raise ScanError("git log returned malformed commit identity metadata")
+        commit, author_name, author_email, committer_name, committer_email = fields
+        for role, name, email in (
+            ("author", author_name, author_email),
+            ("committer", committer_name, committer_email),
+        ):
+            if not GITHUB_NOREPLY_PATTERN.fullmatch(email):
+                findings.append(f"commit {commit}: {role} email is not GitHub noreply metadata")
+            for label, pattern in TEXT_PATTERNS.items():
+                if label == "email address":
+                    continue
+                if pattern.search(name):
+                    findings.append(f"commit {commit}: {role} name contains {label}")
     return findings
 
 
 def main() -> int:
     try:
         findings = scan()
+        findings.extend(_history_metadata_findings())
     except ScanError as exc:
         print(f"disclosure scan failed: {exc}", file=sys.stderr)
         return 2

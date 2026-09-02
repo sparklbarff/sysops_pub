@@ -51,8 +51,10 @@ class FileState:
 def _load_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise ControlError(f"configuration not found: {path}") from exc
+    except OSError as exc:
+        raise ControlError(f"could not read configuration {path}: {exc}") from exc
+    except UnicodeError as exc:
+        raise ControlError(f"configuration is not valid UTF-8: {path}: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise ControlError(f"invalid JSON in {path}: {exc}") from exc
     if not isinstance(value, dict):
@@ -202,8 +204,14 @@ def _managed_files(
         platforms = entry["platforms"]
         if "any" not in platforms and current_platform not in platforms:
             raise ControlError(f"component {name} does not support platform {current_platform}")
-        source_rel = _safe_relative(str(entry.get("source", "")), f"{name}.source")
-        destination_rel = _safe_relative(str(entry.get("destination", "")), f"{name}.destination")
+        source_value = entry.get("source")
+        destination_value = entry.get("destination")
+        if not isinstance(source_value, str) or not source_value:
+            raise ControlError(f"component source must be a non-empty string: {name}")
+        if not isinstance(destination_value, str) or not destination_value:
+            raise ControlError(f"component destination must be a non-empty string: {name}")
+        source_rel = _safe_relative(source_value, f"{name}.source")
+        destination_rel = _safe_relative(destination_value, f"{name}.destination")
         destination_root = target / destination_rel
         for existing_root, existing_name in destination_roots.items():
             if _is_within(destination_root, existing_root) or _is_within(
@@ -214,7 +222,9 @@ def _managed_files(
                     f"{existing_name} ({existing_root}) and {name} ({destination_root})"
                 )
         destination_roots[destination_root] = name
-        source_root = (REPO_ROOT / source_rel).resolve()
+        declared_source_root = REPO_ROOT / source_rel
+        _check_no_symlink(declared_source_root, REPO_ROOT)
+        source_root = declared_source_root.resolve()
         if not _is_within(source_root, REPO_ROOT):
             raise ControlError(f"component source escapes repository: {name}")
         if not source_root.is_dir():
@@ -310,7 +320,12 @@ def _unmanaged_states(files: Sequence[ManagedFile], target: Path) -> list[FileSt
 
 def _safe_target(raw: str) -> Path:
     target = Path(raw).expanduser().resolve()
-    forbidden = {Path("/").resolve(), Path.home().resolve(), REPO_ROOT, Path.cwd().resolve()}
+    forbidden = {
+        Path(target.anchor).resolve(),
+        Path.home().resolve(),
+        REPO_ROOT,
+        Path.cwd().resolve(),
+    }
     if target in forbidden:
         raise ControlError(f"refusing unsafe sandbox target: {target}")
     return target
@@ -468,7 +483,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _report(states + _unmanaged_states(files, target), target, args.json)
             return 0
         raise ControlError(f"unknown command: {args.command}")
-    except ControlError as exc:
+    except (ControlError, OSError, RuntimeError, ValueError) as exc:
         print(f"control: {exc}", file=sys.stderr)
         return 2
 

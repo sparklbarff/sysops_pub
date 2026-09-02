@@ -17,6 +17,12 @@ import verify_release  # noqa: E402
 
 
 class VerifyReleaseTests(unittest.TestCase):
+    def test_candidate_identity_requires_exact_checked_out_head(self) -> None:
+        completed = subprocess.CompletedProcess([], 0, stdout="abc123\n", stderr="")
+        with mock.patch.object(verify_release.subprocess, "run", return_value=completed):
+            self.assertTrue(verify_release._verify_candidate_sha("abc123"))
+            self.assertFalse(verify_release._verify_candidate_sha("def456"))
+
     def test_release_check_invokes_bootstrap_wiring_check(self) -> None:
         with tempfile.TemporaryDirectory(prefix="verify-release-") as directory:
             root = Path(directory)

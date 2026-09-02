@@ -15,6 +15,12 @@ cd sysops_pub
 
 Install Python 3.11 or newer. No Python packages are required for the tour or core tests.
 
+The mandatory pre-push gate additionally requires these commands on `PATH`: Black, Ruff, gitleaks,
+and ShellCheck. Install them with the Python and operating-system package managers you already use.
+Bootstrap reports every missing command before changing Git configuration. Versions exercised in
+the 2026-09-01 reference audit were Black 25.11.0, Ruff 0.14.6, gitleaks 8.30.1, and ShellCheck
+0.11.0.
+
 Install the mandatory local pre-push gate after cloning. Preview first, then execute:
 
 macOS or Linux:
@@ -31,8 +37,9 @@ py -3 tools/bootstrap.py
 py -3 tools/bootstrap.py --execute
 ```
 
-This writes only the clone-local `core.hooksPath` setting. The tracked hook runs the complete local
-release verifier before Git sends a push. It does not configure hosted CI.
+This writes only the clone-local `core.hooksPath` setting. The tracked hook reads Git's pre-push ref
+protocol and runs the committed release verifier from each exact outgoing commit in an isolated
+temporary worktree before Git sends the push. It does not configure hosted CI.
 
 ## Choose a path
 
@@ -80,12 +87,24 @@ file wholesale.
 
 ## Platform notes
 
-- Windows Claude Code runs through WSL or Git for Windows. The generated native Windows example
-  uses Git Bash environment expansion and the `py -3` launcher.
+- The Windows Claude Code example uses the native `py -3` launcher and structured hook arguments,
+  avoiding Git Bash and PowerShell quoting differences.
 - macOS and Linux examples use `python3`.
 - The Codex example contains only reviewed sandbox and approval keys. Disabling multi-agent tools is
   offered separately as an optional workflow preference.
 - The optional macOS document explains a lifecycle pattern but includes no system mutation command.
+
+## Compatibility evidence
+
+| Surface | macOS | Linux | Windows |
+|---|---|---|---|
+| Dependency-free Python design | Reviewed | Reviewed | Reviewed |
+| Claude and Codex adapter design | Reviewed | Reviewed | Reviewed |
+| Native core-suite execution | Python 3.11, 3.12, and 3.14 | Not recorded | Not recorded |
+| Native full release verification | Recorded on 2026-09-01 | Not recorded | Not recorded |
+
+Python 3.13 was unavailable in the audit environment; that is missing evidence, not a failed run.
+Design-level compatibility is the current Windows and Linux acceptance target.
 
 ## Maintainer verification
 
@@ -103,4 +122,5 @@ history with gitleaks, and runs automatically on push:
 python tools/verify_release.py --require-tools
 ```
 
-The last release step remains human: review the complete staged diff.
+The last release step remains human: review the complete candidate diff before committing and the
+complete outgoing commit range before pushing.

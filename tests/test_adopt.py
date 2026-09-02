@@ -73,7 +73,8 @@ class AdoptionTests(unittest.TestCase):
             settings = (target / "claude-code" / ".claude" / "settings.json").read_text(
                 encoding="utf-8"
             )
-            self.assertIn("py -3", settings)
+            self.assertIn('"command": "py"', settings)
+            self.assertIn('"-3"', settings)
 
     def test_execute_refuses_any_existing_target(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sysops-pub-adopt-") as directory:

@@ -36,6 +36,7 @@ class BootstrapTests(unittest.TestCase):
         with (
             mock.patch.object(bootstrap, "REPO_ROOT", self.repository),
             mock.patch.object(bootstrap, "PRE_PUSH", hook),
+            mock.patch.object(bootstrap, "_missing_release_tools", return_value=[]),
             contextlib.redirect_stdout(stdout),
             contextlib.redirect_stderr(stderr),
         ):
@@ -72,6 +73,24 @@ class BootstrapTests(unittest.TestCase):
         result, _stdout, stderr = self.run_bootstrap("--check")
         self.assertEqual(result, 2)
         self.assertIn("not executable", stderr)
+
+    def test_execute_reports_missing_release_tools_before_wiring(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        hook = self.repository / ".githooks" / "pre-push"
+        with (
+            mock.patch.object(bootstrap, "REPO_ROOT", self.repository),
+            mock.patch.object(bootstrap, "PRE_PUSH", hook),
+            mock.patch.object(
+                bootstrap, "_missing_release_tools", return_value=["gitleaks", "shellcheck"]
+            ),
+            contextlib.redirect_stdout(stdout),
+            contextlib.redirect_stderr(stderr),
+        ):
+            result = bootstrap.main(["--execute"])
+        self.assertEqual(result, 2)
+        self.assertIn("install the mandatory release tools", stderr.getvalue())
+        self.assertEqual(self.configured_hooks_path(), "")
 
 
 if __name__ == "__main__":

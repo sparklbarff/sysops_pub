@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -13,10 +14,15 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOOKS_PATH = ".githooks"
 PRE_PUSH = REPO_ROOT / HOOKS_PATH / "pre-push"
+RELEASE_TOOLS = ("black", "ruff", "gitleaks", "shellcheck")
 
 
 class BootstrapError(RuntimeError):
     """The local gate could not be established or verified."""
+
+
+def _missing_release_tools() -> list[str]:
+    return [tool for tool in RELEASE_TOOLS if shutil.which(tool) is None]
 
 
 def _git_config(*arguments: str) -> subprocess.CompletedProcess[str]:
@@ -40,6 +46,9 @@ def verify() -> None:
         raise BootstrapError(f"tracked pre-push hook is missing: {PRE_PUSH}")
     if os.name != "nt" and not os.access(PRE_PUSH, os.X_OK):
         raise BootstrapError(f"tracked pre-push hook is not executable: {PRE_PUSH}")
+    missing = _missing_release_tools()
+    if missing:
+        raise BootstrapError("mandatory release tool(s) are unavailable: " + ", ".join(missing))
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -62,10 +71,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if not PRE_PUSH.is_file():
             raise BootstrapError(f"tracked pre-push hook is missing: {PRE_PUSH}")
+        missing = _missing_release_tools()
+        if missing:
+            print("MISSING mandatory release tool(s): " + ", ".join(missing))
+        else:
+            print("READY mandatory release tools: " + ", ".join(RELEASE_TOOLS))
         print(f"WOULD SET git config --local core.hooksPath {HOOKS_PATH}")
         if not args.execute:
             print("dry-run only: pass --execute to install the local gate")
             return 0
+        if missing:
+            raise BootstrapError(
+                "install the mandatory release tools before executing bootstrap: "
+                + ", ".join(missing)
+            )
         result = _git_config("config", "--local", "core.hooksPath", HOOKS_PATH)
         if result.returncode:
             detail = result.stderr.strip() or f"git config returned {result.returncode}"

@@ -14,8 +14,10 @@ root is unavailable, or when hook input is malformed or lacks a supported path. 
 feeds real JSON through stdin and proves both block and admit behavior.
 
 Use `settings.posix.json.example` with `python3` on macOS, Linux, WSL, or Git Bash. Use
-`settings.windows.json.example` with the Windows `py -3` launcher. The adoption bundle places the
-guard under `.agent-tools/`, which is the path used by both examples.
+`settings.windows.json.example` with the Windows `py -3` launcher. Both use structured `command`
+and `args` fields, so path placeholder expansion does not depend on POSIX, Git Bash, or PowerShell
+quoting rules. The adoption bundle places the guard under `.agent-tools/`, which is the path used
+by both examples.
 
 `CLAUDE.md.example` is a self-contained starter policy. Adapt its identity, scope, and repository
 test command before use.

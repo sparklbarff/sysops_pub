@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import adopt  # noqa: E402
 
 
-def _hook_command(settings: dict[str, object]) -> str:
+def _hook_command(settings: dict[str, object]) -> tuple[str, list[str]]:
     hooks = settings["hooks"]
     assert isinstance(hooks, dict)
     pre_tool_use = hooks["PreToolUse"]
@@ -27,7 +27,16 @@ def _hook_command(settings: dict[str, object]) -> str:
     assert isinstance(command, dict)
     value = command["command"]
     assert isinstance(value, str)
-    return value
+    args = command["args"]
+    assert isinstance(args, list)
+    assert all(isinstance(item, str) for item in args)
+    return value, args
+
+
+def _expanded_hook_command(settings: dict[str, object], project: Path) -> list[str]:
+    command, args = _hook_command(settings)
+    placeholder = "${CLAUDE_PROJECT_DIR}"
+    return [command, *(argument.replace(placeholder, str(project)) for argument in args)]
 
 
 class ClaudeWiringTests(unittest.TestCase):
@@ -55,13 +64,12 @@ class ClaudeWiringTests(unittest.TestCase):
             )
             entry = settings["hooks"]["PreToolUse"][0]
             self.assertEqual(entry["matcher"], "Write|Edit")
-            command = _hook_command(settings)
+            command = _expanded_hook_command(settings, project)
             environment = os.environ.copy()
             environment["CLAUDE_PROJECT_DIR"] = str(project)
 
             admitted = subprocess.run(
                 command,
-                shell=True,
                 input=json.dumps({"tool_input": {"file_path": str(project / "inside.md")}}),
                 check=False,
                 capture_output=True,
@@ -70,7 +78,6 @@ class ClaudeWiringTests(unittest.TestCase):
             )
             blocked = subprocess.run(
                 command,
-                shell=True,
                 input=json.dumps(
                     {"tool_input": {"file_path": str(Path(directory) / "outside.md")}}
                 ),
@@ -106,9 +113,11 @@ class ClaudeWiringTests(unittest.TestCase):
             )
             entry = settings["hooks"]["PreToolUse"][0]
             self.assertEqual(entry["matcher"], "Write|Edit")
-            command = _hook_command(settings)
-            self.assertIn("py -3", command)
-            self.assertIn("$CLAUDE_PROJECT_DIR/.agent-tools/scope_guard.py", command)
+            command, args = _hook_command(settings)
+            self.assertEqual(command, "py")
+            self.assertEqual(args[0], "-3")
+            self.assertEqual(args[1], "${CLAUDE_PROJECT_DIR}/.agent-tools/scope_guard.py")
+            self.assertEqual(args[2], "--claude-hook")
             self.assertTrue((project / ".agent-tools" / "scope_guard.py").is_file())
 
 

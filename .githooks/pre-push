@@ -11,13 +11,13 @@ export PATH
 repo_root=$(git rev-parse --show-toplevel)
 
 if command -v python3 >/dev/null 2>&1; then
-  exec python3 "$repo_root/tools/verify_release.py" --require-tools
+  exec python3 "$repo_root/tools/pre_push.py"
 fi
 if command -v py >/dev/null 2>&1; then
-  exec py -3 "$repo_root/tools/verify_release.py" --require-tools
+  exec py -3 "$repo_root/tools/pre_push.py"
 fi
 if command -v python >/dev/null 2>&1; then
-  exec python "$repo_root/tools/verify_release.py" --require-tools
+  exec python "$repo_root/tools/pre_push.py"
 fi
 
 echo "pre-push: Python 3.11 or newer is required" >&2

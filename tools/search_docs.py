@@ -18,6 +18,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CORPUS = REPO_ROOT / "samples" / "rag" / "corpus"
 TOKEN_RE = re.compile(r"[a-z0-9_]+")
+RECEIPT_SCHEMA_VERSION = 1
+RETRIEVER_ID = "token-overlap-set-v1"
 
 
 def _tokens(text: str) -> set[str]:
@@ -52,6 +54,8 @@ def retrieve(query: str, corpus: Path, limit: int = 3) -> dict[str, object]:
             cited_path = path.relative_to(corpus)
         sources.append({"path": str(cited_path), "score": score})
     return {
+        "receipt_schema_version": RECEIPT_SCHEMA_VERSION,
+        "retriever_id": RETRIEVER_ID,
         "query": query,
         "outcome": "answered" if sources else "not_found",
         "corpus_digest": _corpus_digest(files),
@@ -77,11 +81,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.limit < 1:
         print("search_docs: --limit must be positive", file=sys.stderr)
         return 2
+    requirement_id = args.requirement_id.strip()
+    if not requirement_id:
+        print("search_docs: --requirement-id must not be blank", file=sys.stderr)
+        return 2
     if not args.corpus.is_dir():
         print(f"search_docs: corpus not found: {args.corpus}", file=sys.stderr)
         return 2
     receipt = retrieve(args.query, args.corpus.resolve(), args.limit)
-    receipt["requirement_id"] = args.requirement_id
+    receipt["requirement_id"] = requirement_id
     print(json.dumps(receipt, indent=2, sort_keys=True))
     return 0 if receipt["outcome"] == "answered" else 1
 

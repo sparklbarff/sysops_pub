@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -206,6 +207,59 @@ class ControlLoopTests(unittest.TestCase):
             )
         self.assertEqual(result, 2)
         self.assertIn("has no managed files", stderr)
+
+    @unittest.skipIf(os.name == "nt", "symlink creation may require elevated Windows privileges")
+    def test_component_rejects_symlink_declared_as_source_root(self) -> None:
+        fixture_root = Path(self.temporary.name) / "fixture-repository"
+        real_source = fixture_root / "components" / "real" / "desired"
+        real_source.mkdir(parents=True)
+        (real_source / "file.txt").write_text("synthetic\n", encoding="utf-8")
+        linked_source = fixture_root / "components" / "linked"
+        linked_source.symlink_to(real_source, target_is_directory=True)
+        registry = fixture_root / "registry.json"
+        registry.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "components": [
+                        {
+                            "name": "linked",
+                            "source": "components/linked",
+                            "destination": ".config/linked",
+                            "platforms": ["any"],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        profile = self.write_profile({"linked": {"enabled": True}})
+        self.initialize()
+        with mock.patch.object(control, "REPO_ROOT", fixture_root.resolve()):
+            result, _stdout, stderr = self.run_control(
+                "--registry",
+                str(registry),
+                "--profile",
+                str(profile),
+                "plan",
+                "--target",
+                str(self.target),
+            )
+        self.assertEqual(result, 2)
+        self.assertIn("may not traverse a symlink", stderr)
+
+    def test_directory_registry_returns_concise_control_error(self) -> None:
+        self.initialize()
+        result, _stdout, stderr = self.run_control(
+            "--registry",
+            self.temporary.name,
+            "plan",
+            "--target",
+            str(self.target),
+        )
+        self.assertEqual(result, 2)
+        self.assertIn("control: could not read configuration", stderr)
+        self.assertNotIn("Traceback", stderr)
 
     def test_report_discovers_unmanaged_files_without_failing_verify(self) -> None:
         self.initialize()

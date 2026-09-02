@@ -124,7 +124,33 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Fail when Black, Ruff, gitleaks, or ShellCheck is unavailable",
     )
+    parser.add_argument(
+        "--candidate-sha",
+        help="Require the checked-out HEAD to match this outgoing commit SHA",
+    )
     return parser
+
+
+def _verify_candidate_sha(candidate_sha: str | None) -> bool:
+    if candidate_sha is None:
+        return True
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    actual = result.stdout.strip()
+    if result.returncode or actual != candidate_sha:
+        detail = actual or "unavailable"
+        print(
+            f"FAIL: candidate identity: expected {candidate_sha}, checked out {detail}",
+            file=sys.stderr,
+        )
+        return False
+    print(f"PASS: candidate identity ({candidate_sha})")
+    return True
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -134,6 +160,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     passed = True
+    passed &= _verify_candidate_sha(args.candidate_sha)
     passed &= _verify_hook_wiring()
     passed &= _run("dependency-free suite", [sys.executable, "tools/test.py"])
     passed &= _run("case exercises", [sys.executable, "tools/case_exercises.py", "all"])
@@ -172,7 +199,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if passed:
         print("\nrelease verification: pass")
-        print("manual step: review the complete staged diff before pushing")
+        print("manual step: review the complete outgoing commit range before pushing")
         return 0
     print("\nrelease verification: fail", file=sys.stderr)
     return 1

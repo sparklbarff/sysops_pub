@@ -58,3 +58,7 @@ For every important control, distinguish:
 
 The last distinction catches controls that run successfully against a stale path, wrong process,
 or unrelated executable.
+
+The tracked pre-push control applies this model literally. It consumes Git's outgoing ref records,
+materializes each outgoing commit in a temporary detached worktree, and runs the verifier contained
+in that commit. Unit tests separately prove that the tracked shell launcher reaches this driver.

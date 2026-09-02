@@ -1,5 +1,12 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "findings": [],
-  "binary_files": []
+  "binary_files": [],
+  "omission_files": [
+    {
+      "path": "samples/cases/eidolon-ledger.json",
+      "sha256": "c9e261fde731aae66838b195c85f82ad10cf95d678c2aa4379f0a19dc070fcc2",
+      "reason": "Synthetic case-study fixture for the deliberately unresolved ledger parser"
+    }
+  ]
 }

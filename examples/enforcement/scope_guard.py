@@ -12,8 +12,11 @@ from pathlib import Path
 
 
 def decision(root: Path, candidate: Path) -> tuple[bool, str]:
-    resolved_root = root.expanduser().resolve()
-    resolved_candidate = candidate.expanduser().resolve()
+    try:
+        resolved_root = root.expanduser().resolve()
+        resolved_candidate = candidate.expanduser().resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        return False, f"path resolution failed: {exc}"
     try:
         resolved_candidate.relative_to(resolved_root)
     except ValueError:

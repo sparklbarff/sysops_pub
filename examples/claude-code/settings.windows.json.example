@@ -6,7 +6,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "py -3 \"$CLAUDE_PROJECT_DIR/.agent-tools/scope_guard.py\" --claude-hook"
+            "command": "py",
+            "args": [
+              "-3",
+              "${CLAUDE_PROJECT_DIR}/.agent-tools/scope_guard.py",
+              "--claude-hook"
+            ]
           }
         ]
       }

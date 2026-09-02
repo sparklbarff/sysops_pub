@@ -12,9 +12,11 @@ python3 tools/search_docs.py "How is desired state verified?" \
 The receipt records:
 
 - an explicit `answered` or `not_found` outcome;
+- the receipt schema and retriever algorithm identity;
 - a digest identifying the exact corpus state;
 - cited source paths;
 - the requirement that caused the query.
 
 A production embedding pipeline can replace the ranking function while retaining this receipt
-shape. Scores should not be compared across different corpus digests.
+shape. Scores should not be compared across different corpus digests or retriever identities.
+Changing tokenization, scoring, ordering, or context selection requires a new `retriever_id`.

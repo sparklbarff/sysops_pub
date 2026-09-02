@@ -39,6 +39,7 @@ python tools/test.py
 ```
 
 After cloning, install the mandatory local pre-push gate with `python tools/bootstrap.py --execute`.
-Before a release or push, review the full staged diff. The tracked pre-push hook runs
-`python tools/verify_release.py --require-tools`. These are local gates; this repository does not
-require hosted CI.
+Before a release or push, review the candidate diff and outgoing commit range. The tracked pre-push
+hook runs the exact outgoing commits through `tools/pre_push.py` and
+`tools/verify_release.py --require-tools`. These are local gates; this repository does not require
+hosted CI.

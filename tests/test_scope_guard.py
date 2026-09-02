@@ -112,6 +112,15 @@ class ScopeGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("invalid hook JSON", result.stderr)
 
+    def test_hook_process_fails_closed_on_path_resolution_error(self) -> None:
+        script = ROOT / "examples" / "enforcement" / "scope_guard.py"
+        with tempfile.TemporaryDirectory(prefix="scope-guard-hook-") as directory:
+            payload = json.dumps({"tool_input": {"file_path": "invalid\x00path"}})
+            result = self.run_hook(script, Path(directory), payload)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("BLOCKED: path resolution failed", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
