@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "indexes": [
+    {
+      "name": "sample-project-docs",
+      "repository": "sample-project",
+      "source": "corpus"
+    },
+    {
+      "name": "sample-project-briefs",
+      "repository": "sample-project",
+      "source": "corpus"
+    },
+    {
+      "name": "other-project-docs",
+      "repository": "other-project",
+      "source": "corpus"
+    }
+  ]
+}

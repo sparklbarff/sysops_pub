@@ -59,6 +59,10 @@ For every important control, distinguish:
 The last distinction catches controls that run successfully against a stale path, wrong process,
 or unrelated executable.
 
+Derived state also needs explicit ownership. A repository event can invalidate several indexes, so
+refresh planning maps one repository identity to every owned index. Treating that relationship as
+one-to-one can leave a secondary index stale while the refresh hook itself appears healthy.
+
 The tracked pre-push control applies this model literally. It consumes Git's outgoing ref records,
 materializes each outgoing commit in a temporary detached worktree, and runs the verifier contained
 in that commit. Unit tests separately prove that the tracked shell launcher reaches this driver.

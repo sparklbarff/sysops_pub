@@ -65,6 +65,7 @@ python tools/test.py
 - `examples/claude-code/`: Claude Code identity and hook integration guidance
 - `examples/codex/`: Codex identity and sandbox integration guidance
 - `samples/rag/`: synthetic corpus and a deterministic retrieval-contract example
+- `tools/plan_index_refresh.py`: synthetic one-repository-to-many-index refresh proof
 - `docs/case-studies/`: sanitized Spectre and Eidolon incidents
 - `docs/EXPORT_MANIFEST.md`: what may and may not cross from the private system
 - `docs/CAPABILITY_MATRIX.md`: exact private-to-reference coverage and intentional omissions

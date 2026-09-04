@@ -42,6 +42,7 @@ class AdoptionTests(unittest.TestCase):
             self.assertTrue((target / "claude-code" / ".agent-tools" / "scope_guard.py").is_file())
             self.assertTrue((target / "claude-code" / ".claude" / "settings.json").is_file())
             self.assertTrue((target / "codex" / "AGENTS.md").is_file())
+            self.assertTrue((target / "codex" / "review.config.toml.example").is_file())
             self.assertEqual(
                 hashlib.sha256((target / "claude-code" / "CLAUDE.md").read_bytes()).hexdigest(),
                 hashlib.sha256(
@@ -50,8 +51,13 @@ class AdoptionTests(unittest.TestCase):
             )
             claude_instructions = (target / "claude-code" / "CLAUDE.md").read_text(encoding="utf-8")
             codex_instructions = (target / "codex" / "AGENTS.md").read_text(encoding="utf-8")
+            codex_review_profile = (target / "codex" / "review.config.toml.example").read_text(
+                encoding="utf-8"
+            )
             self.assertNotIn("Read `AGENTS.md`", claude_instructions)
             self.assertNotIn("tools/test.py", codex_instructions)
+            self.assertIn('sandbox_mode = "read-only"', codex_review_profile)
+            self.assertIn("developer_instructions", codex_review_profile)
             settings = (target / "claude-code" / ".claude" / "settings.json").read_text(
                 encoding="utf-8"
             )

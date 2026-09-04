@@ -90,8 +90,8 @@ file wholesale.
 - The Windows Claude Code example uses the native `py -3` launcher and structured hook arguments,
   avoiding Git Bash and PowerShell quoting differences.
 - macOS and Linux examples use `python3`.
-- The Codex example contains only reviewed sandbox and approval keys. Disabling multi-agent tools is
-  offered separately as an optional workflow preference.
+- The Codex examples contain reviewed sandbox and approval keys plus a separate named, read-only
+  profile. Disabling multi-agent tools remains a separate optional example.
 - The optional macOS document explains a lifecycle pattern but includes no system mutation command.
 
 ## Compatibility evidence

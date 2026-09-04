@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 - 2026-09-03
+
+- Add a documented Codex named-profile example using the supported separate profile-file layout.
+- Add a synthetic repository-to-index fan-out planner and prove that every owned index is selected.
+- Keep both additions inside the existing clean-room and dependency-free boundaries.
+
 ## 0.4.0 - 2026-09-01
 
 - Verify exact outgoing commit objects in detached worktrees before push.

@@ -15,8 +15,8 @@ private capability or manage a collaborator's live workstation directly.
 | Repository bootstrap | Installs workstation prerequisites and packages | Previews, installs, and verifies only this clone's mandatory pre-push gate | Deliberately narrower |
 | Delivery gates | Local pre-commit and post-commit controls protect the private source and deployment loop | A tracked pre-push gate verifies each exact outgoing commit in an isolated worktree | Portable control pattern, different lifecycle |
 | Claude Code integration | Live identity, hooks, policies, and deployment | Reviewable project policy, settings, and scope-guard examples | Sanitized adapter |
-| Codex integration | Live instructions, sandbox policy, and parity validation | Reviewable instructions and sandbox configuration examples | Sanitized adapter |
-| Local retrieval | Real local indexes, policy, receipts, and operational grounding | Synthetic corpus and deterministic retrieval-contract exercise | Sanitized reimplementation |
+| Codex integration | Live instructions, named profiles, sandbox policy, and parity validation | Reviewable instructions, named-profile, and sandbox configuration examples | Sanitized adapter |
+| Local retrieval | Real local indexes, refresh fan-out, policy, receipts, and operational grounding | Synthetic corpus, repository-to-index fan-out, and deterministic retrieval-contract exercises | Sanitized reimplementation |
 | macOS management | Homebrew, defaults, Dock, shell, window management, LaunchAgents, themes, privacy, and password-store integration | Lifecycle guidance only; no operating-system mutation command | Design-only by policy |
 | Windows and Linux | Not the private controller's host target | Dependency-free core is designed for both; native execution evidence is not yet recorded | Design-level compatibility |
 | Workstation diagnostics | Reads real host processes, applications, services, logs, and configuration | No live host diagnostics | Deliberate omission |

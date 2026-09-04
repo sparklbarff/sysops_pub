@@ -1,0 +1,5 @@
+# Save a reviewed copy as $CODEX_HOME/review.config.toml.
+# Select it explicitly with: codex --profile review
+sandbox_mode = "read-only"
+approval_policy = "on-request"
+developer_instructions = "Review and explain the repository state. Do not modify files."

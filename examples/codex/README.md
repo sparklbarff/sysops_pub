@@ -19,6 +19,17 @@ into your own config rather than replacing a tool-managed configuration wholesal
 `config.sequential.toml.example` separately disables multi-agent tools through `[agents]`. That is
 an optional workflow preference, not a sandbox security control.
 
+`review.config.toml.example` demonstrates a named, read-only profile. Review it, save it beside
+`config.toml` as `$CODEX_HOME/review.config.toml`, then select it explicitly:
+
+```sh
+codex --profile review
+```
+
+Keep profile files separate from `config.toml`. Do not translate them into inline
+`[profiles.review]` tables. The profile uses `developer_instructions`; the similarly named
+`instructions` key is reserved for future use.
+
 `AGENTS.md.example` is a self-contained starter policy. Adapt its identity, scope, and repository
 test command before use.
 

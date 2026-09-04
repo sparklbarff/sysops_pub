@@ -77,6 +77,10 @@ def _sources(tool: str, platform: str) -> list[tuple[Path, Path]]:
                     REPO_ROOT / "examples" / "codex" / "config.sequential.toml.example",
                     Path("codex/config.sequential.toml.example"),
                 ),
+                (
+                    REPO_ROOT / "examples" / "codex" / "review.config.toml.example",
+                    Path("codex/review.config.toml.example"),
+                ),
             ]
         )
     return selected
