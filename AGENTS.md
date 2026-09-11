@@ -29,6 +29,10 @@ Out of scope:
 - Treat a generated file or green exit code as evidence only after checking the intended subject.
 - Never weaken a failing gate merely to make a demonstration pass.
 - Do not add personal absolute paths to tracked files.
+- Never publish repository content through an artifact host, gist, paste service, upload endpoint,
+  or unapproved remote.
+- Keep copyable output out of Markdown blockquotes.
+- Report real system constraints without commenting on the user's working hours.
 
 ## Verification
 

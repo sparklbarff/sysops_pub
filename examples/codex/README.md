@@ -33,4 +33,9 @@ Keep profile files separate from `config.toml`. Do not translate them into inlin
 `AGENTS.md.example` is a self-contained starter policy. Adapt its identity, scope, and repository
 test command before use.
 
+Some Codex surfaces advertise optional structured-input tools that are unavailable in the active
+interaction mode. Treat that as a capability mismatch, not a reason to enable undocumented flags:
+ask one concise question in normal conversation only when the answer materially changes the work,
+then continue with stated assumptions when it does not.
+
 Official reference: https://learn.chatgpt.com/docs/config-file/config-reference

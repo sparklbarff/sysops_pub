@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "channels": {
+    "cli-tools": {
+      "formatter": {
+        "running": false,
+        "version": "1.8.0"
+      },
+      "retriever": {
+        "running": false,
+        "version": "3.1.0"
+      }
+    },
+    "desktop-apps": {
+      "model-runner": {
+        "running": true,
+        "version": "1.4.0"
+      },
+      "terminal": {
+        "running": false,
+        "version": "4.0.0"
+      }
+    }
+  }
+}

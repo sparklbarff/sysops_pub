@@ -64,6 +64,7 @@ class ClaudeWiringTests(unittest.TestCase):
             )
             entry = settings["hooks"]["PreToolUse"][0]
             self.assertEqual(entry["matcher"], "Write|Edit")
+            self.assertEqual(settings["permissions"]["deny"], ["Artifact"])
             command = _expanded_hook_command(settings, project)
             environment = os.environ.copy()
             environment["CLAUDE_PROJECT_DIR"] = str(project)
@@ -113,6 +114,7 @@ class ClaudeWiringTests(unittest.TestCase):
             )
             entry = settings["hooks"]["PreToolUse"][0]
             self.assertEqual(entry["matcher"], "Write|Edit")
+            self.assertEqual(settings["permissions"]["deny"], ["Artifact"])
             command, args = _hook_command(settings)
             self.assertEqual(command, "py")
             self.assertEqual(args[0], "-3")

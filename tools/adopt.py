@@ -53,6 +53,10 @@ def _sources(tool: str, platform: str) -> list[tuple[Path, Path]]:
                     Path("claude-code/CLAUDE.md"),
                 ),
                 (
+                    REPO_ROOT / "examples" / "claude-code" / "PLAYWRIGHT.md.example",
+                    Path("claude-code/PLAYWRIGHT.md"),
+                ),
+                (
                     REPO_ROOT / "examples" / "enforcement" / "scope_guard.py",
                     Path("claude-code/.agent-tools/scope_guard.py"),
                 ),

@@ -1,0 +1,7 @@
+{
+  "exclude_globs": [
+    "*evaluation*.md",
+    "*review*.md"
+  ],
+  "schema_version": 1
+}

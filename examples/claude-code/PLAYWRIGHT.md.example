@@ -1,0 +1,26 @@
+# Dedicated Playwright MCP browser
+
+Browser automation should never silently attach to a daily browser containing live sessions.
+Select an automation browser explicitly and install the build expected by the MCP package itself.
+
+Example using Firefox:
+
+```text
+npx @playwright/mcp@latest install-browser firefox
+claude mcp add playwright --scope user -- npx @playwright/mcp@latest --browser firefox
+```
+
+If an argument-free Playwright plugin is also enabled, disable it so it cannot register a second
+server with different defaults. Do not edit a plugin cache because updates replace cached files.
+
+Verification must cover behavior, not registration alone:
+
+1. Invoke a browser navigation through the MCP.
+2. Read the structured result and require its error field to be false.
+3. Inspect the launched executable path while the browser is running.
+4. Confirm the path belongs to the dedicated automation cache, not an installed daily browser.
+5. Close the MCP and confirm its browser process exits.
+
+The MCP can pin a different Playwright browser revision than the general `playwright` package.
+Installing with `npx playwright install` may therefore download a browser the MCP will not use.
+Use the MCP package's `install-browser` command.

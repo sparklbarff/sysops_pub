@@ -12,6 +12,11 @@ user explicitly authorizes a broader operation.
 - Keep mutations scoped and recoverable.
 - Never bypass repository hooks or validators.
 - Treat hook success as evidence only after proving the hook reached its intended input.
+- Never publish content through an Artifact tool, gist, paste service, upload endpoint, or new Git
+  remote unless the user explicitly authorizes that exact publication in the current conversation.
+- Keep text intended for copying in plain text or a fenced code block, never a blockquote.
+- Report real machine constraints, but do not comment on the user's working hours or suggest when
+  they should stop.
 
 ## Verification
 

@@ -85,6 +85,31 @@ Review the generated `claude-code/` and `codex/` directories independently. They
 same policy concepts through different enforcement mechanisms. Do not replace an existing settings
 file wholesale.
 
+## Try supervised operations
+
+Create a disposable synthetic update state outside the repository:
+
+```text
+python3 tools/update_supervisor.py init ../update-demo
+python3 tools/update_supervisor.py init ../update-demo --execute
+python3 tools/update_supervisor.py check ../update-demo
+python3 tools/update_supervisor.py apply ../update-demo --channel cli-tools
+python3 tools/update_supervisor.py apply ../update-demo --channel cli-tools --execute
+```
+
+The first apply is a preview. The executed apply changes only the named synthetic channel, verifies
+the result, and writes a receipt under the disposable target. The desktop channel demonstrates that
+a running application is deferred while an idle sibling can update.
+
+Run a command in the foreground with an explicit timeout and a sanitized receipt outside the repo:
+
+```text
+python3 tools/managed_job.py --receipt ../managed-job.json --timeout 60 -- python3 tools/test.py
+```
+
+The receipt omits raw command arguments. On timeout or interruption the runner cleans up only the
+process it started and, on POSIX systems, that owned process group.
+
 ## Platform notes
 
 - The Windows Claude Code example uses the native `py -3` launcher and structured hook arguments,
@@ -92,6 +117,10 @@ file wholesale.
 - macOS and Linux examples use `python3`.
 - The Codex examples contain reviewed sandbox and approval keys plus a separate named, read-only
   profile. Disabling multi-agent tools remains a separate optional example.
+- The Claude settings examples mechanically deny the named Artifact publication tool. Project
+  instructions carry the broader no-upload rule.
+- Browser automation guidance selects a dedicated browser explicitly and uses the MCP package's own
+  matching browser installer.
 - The optional macOS document explains a lifecycle pattern but includes no system mutation command.
 
 ## Compatibility evidence
@@ -105,6 +134,11 @@ file wholesale.
 
 Python 3.13 was unavailable in the audit environment; that is missing evidence, not a failed run.
 Design-level compatibility is the current Windows and Linux acceptance target.
+
+Native Windows and Linux evidence remains wanted. Record it only from a real native run of the
+exact commit, including the platform, Python version, test command, exit status, and commit SHA.
+Do not substitute a container, compatibility layer, or hosted CI badge without labeling that
+different execution environment.
 
 ## Maintainer verification
 

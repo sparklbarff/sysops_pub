@@ -1,4 +1,9 @@
 {
+  "permissions": {
+    "deny": [
+      "Artifact"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {

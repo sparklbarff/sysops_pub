@@ -59,6 +59,8 @@ python tools/test.py
 - `profiles/demo.json`: selected desired state
 - `tools/control.py`: plan, dry-run, scoped apply, verify, and report commands
 - `tools/adopt.py`: dry-run-first Claude Code and Codex starter-bundle builder
+- `tools/update_supervisor.py`: isolated check, scoped apply, deferral, receipt, and verification demo
+- `tools/managed_job.py`: foreground process ownership with timeout cleanup and sanitized receipts
 - `tools/bootstrap.py`: mandatory repository-local pre-push gate installer and verifier
 - `tools/verify_release.py`: complete local-only release verification
 - `examples/enforcement/scope_guard.py`: small executable allow/block proof
@@ -66,6 +68,7 @@ python tools/test.py
 - `examples/codex/`: Codex identity and sandbox integration guidance
 - `samples/rag/`: synthetic corpus and a deterministic retrieval-contract example
 - `tools/plan_index_refresh.py`: synthetic one-repository-to-many-index refresh proof
+- `examples/macos/iterm_agent_status.py`: optional sanitized iTerm2 status variable publisher
 - `docs/case-studies/`: sanitized Spectre and Eidolon incidents
 - `docs/EXPORT_MANIFEST.md`: what may and may not cross from the private system
 - `docs/CAPABILITY_MATRIX.md`: exact private-to-reference coverage and intentional omissions
@@ -90,5 +93,9 @@ Read `docs/SECURITY_BOUNDARY.md` before adapting it to a real machine.
 - Session memories, handoffs, transcripts, metrics, ledgers, logs, and generated reports
 - Live project dispatches or private source code
 - Destructive backup, privacy, theming, and operating-system mutation scripts
+
+The update and managed-job examples operate only on synthetic state or commands chosen by the
+operator. They do not invoke a package manager, install software, or create unattended background
+services.
 
 Spectre and Eidolon appear only as recognizable governance case studies.

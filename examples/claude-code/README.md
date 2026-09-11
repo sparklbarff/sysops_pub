@@ -13,6 +13,11 @@ The POSIX and Windows settings examples wire the sample scope guard to `PreToolU
 root is unavailable, or when hook input is malformed or lacks a supported path. The test suite
 feeds real JSON through stdin and proves both block and admit behavior.
 
+Both settings examples also deny the named `Artifact` tool. This is a narrow mechanical control for
+one known publication path. The accompanying project instructions state the broader rule because a
+tool-name deny cannot recognize every gist, paste service, upload command, or newly configured
+remote.
+
 Use `settings.posix.json.example` with `python3` on macOS, Linux, WSL, or Git Bash. Use
 `settings.windows.json.example` with the Windows `py -3` launcher. Both use structured `command`
 and `args` fields, so path placeholder expansion does not depend on POSIX, Git Bash, or PowerShell
@@ -25,3 +30,6 @@ test command before use.
 This is a teaching example, not a complete security boundary. Shell commands can write files
 without using `Write` or `Edit`, so a production configuration also needs command controls,
 filesystem permissions, and repository gates.
+
+Read `PLAYWRIGHT.md.example` before enabling browser automation. It requires explicit browser
+selection, an automation-only browser build, and verification of the process actually launched.

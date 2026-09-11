@@ -16,6 +16,9 @@ repository. Nothing crosses merely because it is tracked or technically reusable
 | Claude Code configuration | `examples/claude-code/` | Rewrite | Explain hooks and identity without copying live settings |
 | Codex configuration | `examples/codex/` | Rewrite | Explain sandbox and instructions without copying live config |
 | Local RAG policy and receipts | `samples/rag/` | Reimplement | Demonstrate the contract over a synthetic corpus; make Ollama optional |
+| Supervised update controller | `tools/update_supervisor.py`, `samples/updates/` | Reimplement | Preserve check, scope, deferral, receipt, and verify semantics without package managers or host inventory |
+| Managed heavy-job wrapper | `tools/managed_job.py` | Reimplement | Preserve process ownership and sanitized receipt semantics without private commands or metrics |
+| iTerm2 agent cockpit | `examples/macos/iterm_agent_status.py` | Reimplement | Publish only sanitized label and state; omit hooks, paths, transcripts, and session data |
 | macOS configuration lifecycle | `docs/MACOS_OPTIONAL.md` | Rewrite | Show the pattern, not the owner's Dock, packages, defaults, or LaunchAgents |
 | Spectre governance incidents | `docs/case-studies/SPECTRE.md` | Rewrite | Named case study, no private project implementation |
 | Eidolon evidence incidents | `docs/case-studies/EIDOLON.md` | Rewrite | Named case study, no private project implementation |

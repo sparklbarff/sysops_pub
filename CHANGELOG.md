@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0 - 2026-09-11
+
+- Deny Claude's Artifact tool in both starter settings and carry a broader no-publication rule in
+  both agent instruction examples.
+- Add a synthetic supervised updater with check-only default, exact-channel apply, running-item
+  deferral, post-update verification, and receipts.
+- Add a foreground managed-job runner with owned timeout cleanup and sanitized receipts.
+- Stop describing retrieved context as an answer; record context size, generation state, policy
+  identity, and self-evaluation exclusions.
+- Document the Codex structured-input fallback and explicit dedicated-browser Playwright setup.
+- Add an optional non-mutating iTerm2 status publisher while leaving native Windows and Linux proof
+  explicitly open.
+
 ## 0.4.1 - 2026-09-03
 
 - Add a documented Codex named-profile example using the supported separate profile-file layout.

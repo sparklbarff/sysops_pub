@@ -39,6 +39,7 @@ class AdoptionTests(unittest.TestCase):
             )
             self.assertEqual(result, 0, stderr)
             self.assertTrue((target / "claude-code" / "CLAUDE.md").is_file())
+            self.assertTrue((target / "claude-code" / "PLAYWRIGHT.md").is_file())
             self.assertTrue((target / "claude-code" / ".agent-tools" / "scope_guard.py").is_file())
             self.assertTrue((target / "claude-code" / ".claude" / "settings.json").is_file())
             self.assertTrue((target / "codex" / "AGENTS.md").is_file())
@@ -62,6 +63,7 @@ class AdoptionTests(unittest.TestCase):
                 encoding="utf-8"
             )
             self.assertIn("python3", settings)
+            self.assertIn('"Artifact"', settings)
 
     def test_windows_bundle_selects_python_launcher(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sysops-pub-adopt-") as directory:
@@ -81,6 +83,7 @@ class AdoptionTests(unittest.TestCase):
             )
             self.assertIn('"command": "py"', settings)
             self.assertIn('"-3"', settings)
+            self.assertIn('"Artifact"', settings)
 
     def test_execute_refuses_any_existing_target(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sysops-pub-adopt-") as directory:

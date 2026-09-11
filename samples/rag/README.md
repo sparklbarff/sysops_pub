@@ -9,13 +9,20 @@ python3 tools/search_docs.py "How is desired state verified?" \
   --requirement-id demo-orientation-001
 ```
 
-The receipt records:
+This tool retrieves context only. It does not generate an answer, and its receipt does not call a
+retrieval hit an answer. The receipt records:
 
-- an explicit `answered` or `not_found` outcome;
+- an explicit `context_found` or `no_context` retrieval outcome;
 - the receipt schema and retriever algorithm identity;
 - a digest identifying the exact corpus state;
+- the selected context document count and character count;
+- whether generation ran and whether a generator emitted a not-found marker;
 - cited source paths;
 - the requirement that caused the query.
+
+`corpus/corpus-policy.json` excludes synthetic evaluation and review reports. Its digest and the
+excluded filenames are included in the receipt. This prevents a report from becoming evidence for
+its own evaluation while making the exclusion reviewable.
 
 A production embedding pipeline can replace the ranking function while retaining this receipt
 shape. Scores should not be compared across different corpus digests or retriever identities.

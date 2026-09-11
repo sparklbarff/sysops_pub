@@ -66,3 +66,34 @@ one-to-one can leave a secondary index stale while the refresh hook itself appea
 The tracked pre-push control applies this model literally. It consumes Git's outgoing ref records,
 materializes each outgoing commit in a temporary detached worktree, and runs the verifier contained
 in that commit. Unit tests separately prove that the tracked shell launcher reaches this driver.
+
+## Supervised operations
+
+Long-running and machine-changing work needs a control loop of its own.
+
+The synthetic update supervisor separates four concerns:
+
+1. Check every declared channel without writing.
+2. Require one explicitly named channel for apply.
+3. Defer a running application instead of force-quitting it.
+4. Write before, action, after, and independent-verification evidence to a receipt.
+
+The example changes only a marked synthetic state directory. Real package-manager adapters are an
+adoption boundary because each platform needs its own discovery, rollback, privilege, and process
+detection rules.
+
+The managed-job runner addresses process ownership separately. It starts one foreground child,
+waits through completion, and terminates only the process group it created on timeout or interrupt.
+Its receipt records the executable name and argument count but not raw arguments, which may contain
+tokens or private paths. A runner cannot make an arbitrary command resource-safe, so worker limits
+remain part of the called tool's reviewed invocation contract.
+
+## Retrieval claims
+
+Retrieving context is not the same thing as answering a question. The synthetic retrieval receipt
+therefore records `context_found` or `no_context`, context size, whether generation ran, and whether
+a generator emitted a not-found marker. It never labels overlapping source text as an answer.
+
+Corpus policy is also evidence. Evaluation and review reports are excluded from the example corpus,
+and the receipt binds both the policy digest and excluded filenames. This prevents an evaluation
+report from becoming evidence for its own question.

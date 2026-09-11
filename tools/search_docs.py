@@ -8,6 +8,7 @@ requirement identity, and cited source paths that a production local RAG wrapper
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import re
@@ -18,8 +19,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CORPUS = REPO_ROOT / "samples" / "rag" / "corpus"
 TOKEN_RE = re.compile(r"[a-z0-9_]+")
-RECEIPT_SCHEMA_VERSION = 1
+RECEIPT_SCHEMA_VERSION = 2
 RETRIEVER_ID = "token-overlap-set-v1"
+POLICY_NAME = "corpus-policy.json"
 
 
 def _tokens(text: str) -> set[str]:
@@ -36,8 +38,45 @@ def _corpus_digest(files: Sequence[Path]) -> str:
     return digest.hexdigest()
 
 
+def _corpus_files(corpus: Path) -> tuple[list[Path], list[str], str]:
+    policy_path = corpus / POLICY_NAME
+    patterns: list[str] = []
+    if policy_path.exists():
+        if policy_path.is_symlink() or not policy_path.is_file():
+            raise ValueError("corpus policy must be a regular file inside the corpus")
+        try:
+            value = json.loads(policy_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"invalid corpus policy: {exc}") from exc
+        if (
+            not isinstance(value, dict)
+            or value.get("schema_version") != 1
+            or set(value) != {"exclude_globs", "schema_version"}
+            or not isinstance(value["exclude_globs"], list)
+            or not all(isinstance(item, str) and item for item in value["exclude_globs"])
+        ):
+            raise ValueError("corpus policy must contain schema_version 1 and exclude_globs")
+        patterns = value["exclude_globs"]
+        policy_digest = hashlib.sha256(policy_path.read_bytes()).hexdigest()
+    else:
+        policy_digest = hashlib.sha256(b"no-corpus-policy").hexdigest()
+
+    selected: list[Path] = []
+    excluded: list[str] = []
+    for path in sorted(corpus.glob("*.md")):
+        if path.is_symlink():
+            raise ValueError(f"corpus document must not be a symlink: {path.name}")
+        if not path.is_file():
+            continue
+        if any(fnmatch.fnmatch(path.name, pattern) for pattern in patterns):
+            excluded.append(path.name)
+        else:
+            selected.append(path)
+    return selected, excluded, policy_digest
+
+
 def retrieve(query: str, corpus: Path, limit: int = 3) -> dict[str, object]:
-    files = sorted(path for path in corpus.glob("*.md") if path.is_file())
+    files, excluded, policy_digest = _corpus_files(corpus)
     query_tokens = _tokens(query)
     ranked: list[tuple[int, str, Path]] = []
     for path in files:
@@ -52,13 +91,25 @@ def retrieve(query: str, corpus: Path, limit: int = 3) -> dict[str, object]:
             cited_path = path.relative_to(REPO_ROOT)
         except ValueError:
             cited_path = path.relative_to(corpus)
-        sources.append({"path": str(cited_path), "score": score})
+        sources.append(
+            {
+                "characters": len(path.read_text(encoding="utf-8")),
+                "path": str(cited_path),
+                "score": score,
+            }
+        )
     return {
+        "context_characters": sum(int(source["characters"]) for source in sources),
+        "context_document_count": len(sources),
+        "corpus_digest": _corpus_digest(files),
+        "corpus_policy_digest": policy_digest,
+        "excluded_files": excluded,
+        "generation_attempted": False,
+        "not_found_emitted": False,
         "receipt_schema_version": RECEIPT_SCHEMA_VERSION,
         "retriever_id": RETRIEVER_ID,
+        "retrieval_outcome": "context_found" if sources else "no_context",
         "query": query,
-        "outcome": "answered" if sources else "not_found",
-        "corpus_digest": _corpus_digest(files),
         "sources": sources,
     }
 
@@ -88,10 +139,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.corpus.is_dir():
         print(f"search_docs: corpus not found: {args.corpus}", file=sys.stderr)
         return 2
-    receipt = retrieve(args.query, args.corpus.resolve(), args.limit)
+    try:
+        receipt = retrieve(args.query, args.corpus.resolve(), args.limit)
+    except ValueError as exc:
+        print(f"search_docs: {exc}", file=sys.stderr)
+        return 2
     receipt["requirement_id"] = requirement_id
     print(json.dumps(receipt, indent=2, sort_keys=True))
-    return 0 if receipt["outcome"] == "answered" else 1
+    return 0 if receipt["retrieval_outcome"] == "context_found" else 1
 
 
 if __name__ == "__main__":
