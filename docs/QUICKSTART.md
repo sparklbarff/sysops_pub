@@ -6,7 +6,7 @@ natively executed on all three operating systems.
 
 ## Get the repository
 
-After the repository owner adds you as a collaborator:
+Clone the repository:
 
 ```text
 git clone https://github.com/sparklbarff/sysops_pub.git

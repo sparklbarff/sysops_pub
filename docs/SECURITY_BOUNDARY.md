@@ -1,8 +1,10 @@
 # Security boundary
 
-`sysops_pub` is a private collaboration repository and is not intended for public release.
-Repository privacy is still not a substitute for sanitization because collaborators, clones, and
-backups widen the disclosure boundary.
+`sysops_pub` is a public reference implementation. It contains only sanitized, synthetic teaching
+material; nothing is exported here from the private sysops system it mirrors. Publication is exactly
+why sanitization, not repository privacy, is the real boundary. Once a commit is public, clones,
+forks, and caches make any disclosure permanent and impossible to recall, so every tracked file is
+treated as already published the moment it is committed.
 
 ## Trust assumptions
 

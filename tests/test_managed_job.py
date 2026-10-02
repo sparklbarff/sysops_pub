@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import managed_job  # noqa: E402
+import managed_job
 
 
 class ManagedJobTests(unittest.TestCase):
@@ -67,9 +67,11 @@ class ManagedJobTests(unittest.TestCase):
             self.assertEqual(receipt.read_text(), "do not replace")
 
     def test_missing_command_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="managed-job-") as directory:
-            with self.assertRaises(managed_job.ManagedJobError):
-                managed_job.run_managed([], Path(directory) / "missing.json")
+        with (
+            tempfile.TemporaryDirectory(prefix="managed-job-") as directory,
+            self.assertRaises(managed_job.ManagedJobError),
+        ):
+            managed_job.run_managed([], Path(directory) / "missing.json")
 
     def test_symlink_receipt_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="managed-job-") as directory:

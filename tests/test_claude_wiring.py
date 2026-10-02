@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import adopt  # noqa: E402
+import adopt
 
 
 def _hook_command(settings: dict[str, object]) -> tuple[str, list[str]]:

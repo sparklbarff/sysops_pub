@@ -11,7 +11,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import disclosure_scan  # noqa: E402
+import disclosure_scan
 
 
 class DisclosureScanTests(unittest.TestCase):

@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import search_docs  # noqa: E402
+import search_docs
 
 
 class SearchDocsTests(unittest.TestCase):

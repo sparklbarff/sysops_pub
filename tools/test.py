@@ -19,9 +19,6 @@ def _run(label: str, arguments: list[str]) -> int:
 
 
 def main() -> int:
-    if sys.version_info < (3, 11):
-        print("tests: Python 3.11 or newer is required", file=sys.stderr)
-        return 2
     checks = [
         (
             "unit tests",

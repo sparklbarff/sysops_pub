@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import case_exercises  # noqa: E402
+import case_exercises
 
 
 class CaseExerciseTests(unittest.TestCase):

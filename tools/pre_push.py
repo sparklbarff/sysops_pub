@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import tempfile
-import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
@@ -108,9 +108,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     usage_error = _build_usage_error(arguments)
     if usage_error is not None:
         print(f"pre-push: {usage_error}", file=sys.stderr)
-        return 2
-    if sys.version_info < (3, 11):
-        print("pre-push: Python 3.11 or newer is required", file=sys.stderr)
         return 2
     try:
         outgoing_shas = parse_outgoing_shas(sys.stdin)

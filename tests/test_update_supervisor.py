@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import update_supervisor  # noqa: E402
+import update_supervisor
 
 
 class UpdateSupervisorTests(unittest.TestCase):

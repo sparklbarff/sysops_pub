@@ -33,9 +33,6 @@ def _control(arguments: Sequence[str], expected: set[int] | None = None) -> int:
 
 
 def main() -> int:
-    if sys.version_info < (3, 11):
-        print("demo: Python 3.11 or newer is required", file=sys.stderr)
-        return 2
 
     try:
         with tempfile.TemporaryDirectory(prefix="sysops_pub-demo-") as directory:

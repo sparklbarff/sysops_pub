@@ -13,7 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import verify_release  # noqa: E402
+import verify_release
 
 
 class VerifyReleaseTests(unittest.TestCase):

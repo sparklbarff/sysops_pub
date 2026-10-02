@@ -13,7 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import control  # noqa: E402
+import control
 
 
 class ControlLoopTests(unittest.TestCase):

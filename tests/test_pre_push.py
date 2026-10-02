@@ -14,7 +14,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import pre_push  # noqa: E402
+import pre_push
 
 
 class PrePushTests(unittest.TestCase):
@@ -70,14 +70,12 @@ class PrePushTests(unittest.TestCase):
             tools.mkdir()
             verifier = tools / "verify_release.py"
             verifier.write_text(
-                textwrap.dedent(
-                    """\
+                textwrap.dedent("""\
                     from pathlib import Path
                     import sys
 
                     raise SystemExit(0 if Path("fixture.txt").read_text() == "valid\\n" else 1)
-                    """
-                ),
+                    """),
                 encoding="utf-8",
             )
             fixture = repository / "fixture.txt"
@@ -96,9 +94,11 @@ class PrePushTests(unittest.TestCase):
             fixture.write_text("valid\n", encoding="utf-8")
             subprocess.run(["git", "add", "fixture.txt"], cwd=repository, check=True)
 
-            with mock.patch.object(pre_push, "REPO_ROOT", repository):
-                with self.assertRaisesRegex(pre_push.PrePushError, "release verification failed"):
-                    pre_push.verify_outgoing_sha(bad_sha)
+            with (
+                mock.patch.object(pre_push, "REPO_ROOT", repository),
+                self.assertRaisesRegex(pre_push.PrePushError, "release verification failed"),
+            ):
+                pre_push.verify_outgoing_sha(bad_sha)
 
     @unittest.skipIf(os.name == "nt", "tracked hook launcher is POSIX shell")
     def test_tracked_hook_reaches_pre_push_driver_with_protocol_stdin(self) -> None:
@@ -117,14 +117,12 @@ class PrePushTests(unittest.TestCase):
             receipt = repository / "hook-receipt.txt"
             driver = tools / "pre_push.py"
             driver.write_text(
-                textwrap.dedent(
-                    f"""\
+                textwrap.dedent(f"""\
                     import sys
                     from pathlib import Path
 
                     Path({str(receipt)!r}).write_text(sys.stdin.read(), encoding="utf-8")
-                    """
-                ),
+                    """),
                 encoding="utf-8",
             )
             protocol = f"refs/heads/main {'1' * 40} refs/heads/main {'0' * 40}\n"

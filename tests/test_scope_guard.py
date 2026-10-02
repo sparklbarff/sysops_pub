@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "examples" / "enforcement"))
 
-import scope_guard  # noqa: E402
+import scope_guard
 
 
 class ScopeGuardTests(unittest.TestCase):

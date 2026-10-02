@@ -17,7 +17,7 @@ CASE_ROOT = REPO_ROOT / "samples" / "cases"
 def _load(name: str) -> dict[str, Any]:
     value = json.loads((CASE_ROOT / name).read_text(encoding="utf-8"))
     if not isinstance(value, dict):
-        raise ValueError(f"case fixture must be an object: {name}")
+        raise TypeError(f"case fixture must be an object: {name}")
     return value
 
 
@@ -40,12 +40,12 @@ def eidolon_result() -> dict[str, object]:
     runner = str(case["runner_name"])
     rows = case["rows"]
     if not isinstance(rows, list):
-        raise ValueError("eidolon rows must be a list")
+        raise TypeError("eidolon rows must be a list")
     substring_mismatches: list[str] = []
     head_word_mismatches: list[str] = []
     for row in rows:
         if not isinstance(row, dict):
-            raise ValueError("each eidolon row must be an object")
+            raise TypeError("each eidolon row must be an object")
         command = str(row["command"])
         expected = bool(row["is_test_run"])
         substring_guess = runner in command

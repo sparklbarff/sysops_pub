@@ -155,9 +155,6 @@ def _verify_candidate_sha(candidate_sha: str | None) -> bool:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    if sys.version_info < (3, 11):
-        print("release verification requires Python 3.11 or newer", file=sys.stderr)
-        return 2
 
     passed = True
     passed &= _verify_candidate_sha(args.candidate_sha)

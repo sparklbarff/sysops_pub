@@ -135,9 +135,6 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    if sys.version_info < (3, 11):
-        print("adopt: Python 3.11 or newer is required", file=sys.stderr)
-        return 2
     try:
         target = _safe_target(args.target)
         platform = (

@@ -13,7 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-import bootstrap  # noqa: E402
+import bootstrap
 
 
 class BootstrapTests(unittest.TestCase):
