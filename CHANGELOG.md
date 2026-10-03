@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.2 - 2026-10-02
+
+- Frame the retrieval-evaluation verdict honestly: the answer token is a frozen human judgment and
+  the token-in-context check is a reproducible stand-in, not a claim the verdict can be automated.
+- Document the grounding classifier as a demo-only illustration rather than an adoption starter: it
+  presupposes a local retrieval backend the reference repository does not ship, so `adopt.py` omits
+  it by design.
+
 ## 0.6.1 - 2026-10-02
 
 - Add an advisory grounding classifier example: a fail-open UserPromptSubmit control that flags
