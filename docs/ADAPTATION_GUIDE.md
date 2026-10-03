@@ -2,10 +2,16 @@
 
 Start by running the sandbox demo unchanged. Then adapt one component at a time.
 
-Use `tools/adopt.py` to create a reviewable starter bundle outside this repository. It previews by
-default, requires `--execute` to copy, requires a new target path, verifies copied hashes in a
-temporary sibling, and atomically publishes the completed bundle. It never writes directly into
-live Claude Code, Codex, or home configuration.
+Use `tools/adopt.py --target` to create a reviewable starter bundle outside this repository. It
+previews by default, requires `--execute` to copy, requires a new target path, verifies copied
+hashes in a temporary sibling, and atomically publishes the completed bundle.
+
+To install straight into a project you are adopting into, use `tools/adopt.py --into <project>`. It
+names the project-relative destinations (agent instructions, a scope guard, and
+`.claude/settings.json`), previews by default, requires `--execute` to write, never overwrites an
+existing file, and merges `.claude/settings.json` additively after writing a `.sysops-pub.bak`
+backup. It installs project-local files into the directory you name; it does not touch live home or
+global Claude Code or Codex configuration.
 
 ## Add a component
 

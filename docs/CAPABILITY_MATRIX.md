@@ -32,7 +32,7 @@ private capability or manage a collaborator's live workstation directly.
 | Secrets and recovery | Encrypted private material and password-store operations exist outside the share boundary | Prohibited by the export manifest and disclosure scanner | Deliberate omission |
 | Memories, logs, ledgers, and analytics | Private continuity and observability surfaces | Prohibited; examples use synthetic fixtures | Deliberate omission |
 | Spectre and Eidolon | Real project governance and evidence history remain private | Recognizable, sanitized case studies and exercises | Sanitized case study |
-| Live user installer | Private scripts target one reviewed workstation | Adoption tool builds a new reviewable bundle but does not install it into live tool or home configuration | Deferred product-boundary decision |
+| Live user installer | Private scripts target one reviewed workstation | Adoption tool builds a reviewable bundle and installs project-local starters into a named existing project directory (preview-first, non-overwriting, settings merged after backup); installing into live home or global tool configuration stays deferred | Project-scoped; home install deferred |
 
 ## Reading the matrix
 
@@ -45,6 +45,9 @@ private capability or manage a collaborator's live workstation directly.
 - **Deliberate omission** means adding the private capability would violate the teaching or disclosure
   boundary.
 
-The live user installer remains deferred because it would change `sysops_pub` from a teaching and
-bundle-building repository into a workstation configuration product. That choice requires an
-explicit target, ownership, rollback, and support contract.
+`adopt.py --into <project>` installs project-local starters (agent instructions, a scope guard, and
+a merged `.claude/settings.json`) into an existing project directory you name, previewing by default
+and never overwriting an existing file. Installing into live home or global tool configuration stays
+deferred: that would change `sysops_pub` from a teaching and bundle-building repository into a
+workstation configuration product, which requires auto-discovery, ownership, rollback, and a support
+contract this reference does not take on.

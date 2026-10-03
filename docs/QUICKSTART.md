@@ -85,6 +85,27 @@ Review the generated `claude-code/` and `codex/` directories independently. They
 same policy concepts through different enforcement mechanisms. Do not replace an existing settings
 file wholesale.
 
+## Install into a project
+
+To place the project-local starters straight into a project you are adopting into, use `--into`
+instead of `--target`. It previews by default, never overwrites an existing file, and merges
+`.claude/settings.json` additively after writing a `.sysops-pub.bak` backup. It installs into the
+project directory you name and does not touch live home or global tool configuration.
+
+macOS or Linux:
+
+```sh
+python3 tools/adopt.py --into ../my-project --tool both
+python3 tools/adopt.py --into ../my-project --tool both --execute
+```
+
+Windows:
+
+```powershell
+py -3 tools/adopt.py --into ..\my-project --tool both
+py -3 tools/adopt.py --into ..\my-project --tool both --execute
+```
+
 ## Try supervised operations
 
 Create a disposable synthetic update state outside the repository:

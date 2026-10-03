@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import io
+import json
 import sys
 import tempfile
 import unittest
@@ -117,6 +118,94 @@ class AdoptionTests(unittest.TestCase):
             self.assertEqual(
                 [path for path in parent.iterdir() if path.name.startswith(".bundle-")], []
             )
+
+    def test_into_installs_into_a_fresh_project(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
+            project = Path(directory) / "proj"
+            project.mkdir()
+            result, _stdout, stderr = self.run_adopt(
+                "--into", str(project), "--platform", "posix", "--execute"
+            )
+            self.assertEqual(result, 0, stderr)
+            self.assertTrue((project / "CLAUDE.md").is_file())
+            self.assertTrue((project / ".agent-tools" / "scope_guard.py").is_file())
+            self.assertTrue((project / "AGENTS.md").is_file())
+            settings = json.loads((project / ".claude" / "settings.json").read_text("utf-8"))
+            self.assertIn("Artifact", settings["permissions"]["deny"])
+            self.assertIn("PreToolUse", settings["hooks"])
+
+    def test_into_dry_run_writes_nothing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
+            project = Path(directory) / "proj"
+            project.mkdir()
+            result, stdout, stderr = self.run_adopt("--into", str(project))
+            self.assertEqual(result, 0, stderr)
+            self.assertIn("WOULD", stdout)
+            self.assertEqual(list(project.iterdir()), [])
+
+    def test_into_never_overwrites_an_existing_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
+            project = Path(directory) / "proj"
+            project.mkdir()
+            existing = project / "CLAUDE.md"
+            existing.write_text("my own instructions\n", encoding="utf-8")
+            result, stdout, stderr = self.run_adopt(
+                "--into", str(project), "--tool", "claude-code", "--execute"
+            )
+            self.assertEqual(result, 0, stderr)
+            self.assertEqual(existing.read_text(encoding="utf-8"), "my own instructions\n")
+            self.assertIn("PRESENT-DIFFERS-SKIP", stdout)
+
+    def test_into_merges_settings_preserving_user_keys_and_backs_up(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
+            project = Path(directory) / "proj"
+            (project / ".claude").mkdir(parents=True)
+            settings_path = project / ".claude" / "settings.json"
+            settings_path.write_text(
+                json.dumps({"permissions": {"deny": ["SomethingElse"]}, "model": "my-model"}),
+                encoding="utf-8",
+            )
+            result, _stdout, stderr = self.run_adopt(
+                "--into", str(project), "--tool", "claude-code", "--execute"
+            )
+            self.assertEqual(result, 0, stderr)
+            merged = json.loads(settings_path.read_text(encoding="utf-8"))
+            self.assertIn("SomethingElse", merged["permissions"]["deny"])
+            self.assertIn("Artifact", merged["permissions"]["deny"])
+            self.assertEqual(merged["model"], "my-model")
+            self.assertIn("PreToolUse", merged["hooks"])
+            backup = settings_path.with_name("settings.json.sysops-pub.bak")
+            self.assertTrue(backup.is_file())
+            self.assertEqual(
+                json.loads(backup.read_text(encoding="utf-8"))["permissions"]["deny"],
+                ["SomethingElse"],
+            )
+
+    def test_into_settings_merge_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
+            project = Path(directory) / "proj"
+            project.mkdir()
+            self.run_adopt("--into", str(project), "--tool", "claude-code", "--execute")
+            first = (project / ".claude" / "settings.json").read_text(encoding="utf-8")
+            result, stdout, stderr = self.run_adopt(
+                "--into", str(project), "--tool", "claude-code", "--execute"
+            )
+            self.assertEqual(result, 0, stderr)
+            self.assertEqual(
+                (project / ".claude" / "settings.json").read_text(encoding="utf-8"), first
+            )
+            self.assertIn("UNCHANGED", stdout)
+
+    def test_merge_settings_never_removes_and_unions(self) -> None:
+        existing = {"permissions": {"deny": ["Keep"]}, "hooks": {"PreToolUse": [{"a": 1}]}}
+        addition = {"permissions": {"deny": ["Artifact"]}, "hooks": {"PreToolUse": [{"b": 2}]}}
+        merged, changed = adopt._merge_settings(existing, addition)
+        self.assertTrue(changed)
+        self.assertEqual(merged["permissions"]["deny"], ["Keep", "Artifact"])
+        self.assertEqual(merged["hooks"]["PreToolUse"], [{"a": 1}, {"b": 2}])
+        merged_again, changed_again = adopt._merge_settings(merged, addition)
+        self.assertFalse(changed_again)
+        self.assertEqual(merged_again, merged)
 
     def test_refuses_target_that_contains_repository(self) -> None:
         result, _stdout, stderr = self.run_adopt("--target", str(ROOT.parent))

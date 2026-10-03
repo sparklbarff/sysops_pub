@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0 - 2026-10-02
+
+- Add `adopt.py --into <project>`: a project-local installer alongside the existing `--target`
+  bundle builder. It places the project-relative starters (agent instructions, a scope guard, and
+  `.claude/settings.json`) into an existing project directory you name, previews by default, never
+  overwrites an existing file, and merges `.claude/settings.json` additively after writing a
+  `.sysops-pub.bak` backup. The merge unions permission lists and appends unseen hook entries without
+  removing anything, so a second run reports no change.
+- Move the capability-matrix "live user installer" boundary accordingly: installing project-local
+  starters into a named project directory now ships; installing into live home or global tool
+  configuration stays deferred, because that would need auto-discovery, ownership, rollback, and a
+  support contract this teaching reference does not take on.
+
 ## 0.6.3 - 2026-10-02
 
 - Add an MIT LICENSE. Without it the public repository defaulted to all-rights-reserved, which

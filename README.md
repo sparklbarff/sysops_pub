@@ -60,17 +60,19 @@ and managed-job exercises, and the cross-platform evidence matrix.
 ## Adopt it
 
 This repository is meant to be adapted, not only read. Run the demo, then take one component at a
-time into your own configuration. `tools/adopt.py` builds a reviewable starter bundle outside this
-repository, dry-run by default, and `docs/ADAPTATION_GUIDE.md` walks through adding a component,
-adopting the agent policy, and adopting retrieval. The reference never installs into your live tool
-or home configuration: you review the bundle and apply it yourself.
+time into your own configuration. `tools/adopt.py` either builds a reviewable starter bundle outside
+this repository (`--target`, dry-run by default) or installs the project-local starters straight
+into an existing project you name (`--into`, also preview-first and never overwriting an existing
+file). It does not touch your live home or global tool configuration. `docs/ADAPTATION_GUIDE.md`
+walks through adding a component, adopting the agent policy, and adopting retrieval.
 
 ## Repository map
 
 - `registry/components.json`, `profiles/demo.json`: the single source of truth for demo components
   and the desired state that selects them.
 - `tools/control.py`: plan, dry-run, scoped apply, independent verify, and report.
-- `tools/adopt.py`: a dry-run-first builder for Claude Code and Codex starter bundles.
+- `tools/adopt.py`: a dry-run-first tool that builds a reviewable Claude Code and Codex starter
+  bundle (`--target`) or installs the project-local starters into a project you name (`--into`).
 - `tools/update_supervisor.py`, `tools/managed_job.py`: supervised updates and foreground process
   ownership, each with sanitized receipts.
 - `tools/bootstrap.py`, `tools/verify_release.py`: the mandatory repository-local pre-push gate and
