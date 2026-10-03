@@ -16,3 +16,22 @@ predicate.
 
 This example covers file-path inputs only. It does not claim to parse shell commands or intercept
 every write mechanism.
+
+## Advisory grounding classifier
+
+`grounding_classifier.py` is an advisory UserPromptSubmit control, not a block. It recognizes broad,
+orientation-style prompts that benefit from one bounded grounding pass over the project's own
+documents, and stays silent on narrow file-level work:
+
+```sh
+python3 examples/enforcement/grounding_classifier.py "orient me in this codebase"
+python3 examples/enforcement/grounding_classifier.py "fix the failing test in test_scheduler.py"
+```
+
+The first is flagged for grounding; the second is silent. It classifies the prompt text, not the
+work, so a narrow task in broad language is an accepted false positive. That is why it is advisory
+and fails open: a spurious flag costs one bounded query that a null result does not block, never a
+halted session. The cross-cutting pattern keys on a repo-scale scope noun rather than a bare
+preposition, so "across two runs" stays silent while "across the codebase" is flagged. The
+`--hook claude` mode emits `additionalContext` for a broad prompt and nothing otherwise, and any
+error exits 0 so a session is never blocked.

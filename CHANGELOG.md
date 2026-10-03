@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 - 2026-10-02
+
+- Add an advisory grounding classifier example: a fail-open UserPromptSubmit control that flags
+  broad, orientation-style prompts for one bounded grounding pass and stays silent on narrow work,
+  keying the cross-cutting pattern on a repo-scale scope noun rather than a bare preposition. CLI
+  and Claude hook modes, proven at the process boundary including fail-open on malformed input.
+
 ## 0.6.0 - 2026-10-02
 
 - Add a retrieval-evaluation reference: a frozen cohort question set (curated-in-corpus,
