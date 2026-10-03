@@ -35,3 +35,11 @@ halted session. The cross-cutting pattern keys on a repo-scale scope noun rather
 preposition, so "across two runs" stays silent while "across the codebase" is flagged. The
 `--hook claude` mode emits `additionalContext` for a broad prompt and nothing otherwise, and any
 error exits 0 so a session is never blocked.
+
+Adopt it only with a grounding backend. Unlike `scope_guard.py`, a self-contained path check you can
+wire as-is, this classifier only earns its keep when the project has a local retrieval backend to
+ground against. This reference repository ships a synthetic retrieval demo, not a runnable index, so
+`tools/adopt.py` deliberately does not bundle the classifier into a starter: wiring it without a
+grounding backend would inject advice pointing at a capability that is not there. Treat it as an
+illustration of the selective-grounding concept, and adopt it only alongside a real grounding
+system.
