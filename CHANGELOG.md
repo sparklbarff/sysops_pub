@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 - 2026-10-02
+
+- Add a retrieval-evaluation reference: a frozen cohort question set (curated-in-corpus,
+  coverage-gap, absent-control) scored by reusing the `search_docs` retrieval path, with verdicts
+  judged against the retrieved context and bound to the retriever id.
+- Filter stopwords before ranking so a control query is not answered on function-word overlap. This
+  tokenization change bumps the retriever id to `token-overlap-set-v2`, demonstrating the
+  re-judge-on-identity-change contract against the shipped evaluation set.
+- Record the retrieval-evaluation capability in the matrix and drop a hardcoded private file count.
+
 ## 0.5.0 - 2026-09-11
 
 - Deny Claude's Artifact tool in both starter settings and carry a broader no-publication rule in

@@ -69,7 +69,8 @@ and managed-job exercises, and the cross-platform evidence matrix.
   the complete local release check.
 - `examples/`: reviewable Claude Code, Codex, and enforcement starters, plus an optional macOS iTerm2
   status publisher.
-- `samples/rag/`: a synthetic corpus and a deterministic retrieval-contract exercise.
+- `samples/rag/`: a synthetic corpus, a deterministic retrieval-contract exercise, and a frozen
+  cohort retrieval-evaluation benchmark.
 - `docs/ARCHITECTURE.md`, `docs/CAPABILITY_MATRIX.md`, `docs/EXPORT_MANIFEST.md`,
   `docs/SECURITY_BOUNDARY.md`: the design, the exact private-to-reference coverage, and the rules for
   what may cross from the private system.

@@ -20,12 +20,60 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CORPUS = REPO_ROOT / "samples" / "rag" / "corpus"
 TOKEN_RE = re.compile(r"[a-z0-9_]+")
 RECEIPT_SCHEMA_VERSION = 2
-RETRIEVER_ID = "token-overlap-set-v1"
+# Bumped v1 -> v2 when stopword filtering was added below. Changing tokenization changes which
+# documents rank, so the retriever identity changes with it and scores across the two versions are
+# not comparable; a frozen evaluation set bound to v1 must be re-judged against v2. That is the
+# contract this demo teaches, applied to itself.
+RETRIEVER_ID = "token-overlap-set-v2"
 POLICY_NAME = "corpus-policy.json"
+# Function words overlap between any two English texts and are noise, not relevance: counting them
+# let a control query ("what is the capital of France?") retrieve a document on "the", "is", and
+# "of" alone. Overlap on CONTENT words is the signal, so the stopwords are dropped before ranking.
+STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "can",
+        "do",
+        "does",
+        "for",
+        "from",
+        "how",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "of",
+        "on",
+        "or",
+        "still",
+        "that",
+        "the",
+        "their",
+        "this",
+        "to",
+        "we",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "with",
+        "you",
+    }
+)
 
 
 def _tokens(text: str) -> set[str]:
-    return set(TOKEN_RE.findall(text.lower()))
+    return {token for token in TOKEN_RE.findall(text.lower()) if token not in STOPWORDS}
 
 
 def _corpus_digest(files: Sequence[Path]) -> str:

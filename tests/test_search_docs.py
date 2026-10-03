@@ -21,7 +21,7 @@ class SearchDocsTests(unittest.TestCase):
         )
         self.assertEqual(receipt["retrieval_outcome"], "context_found")
         self.assertEqual(receipt["receipt_schema_version"], 2)
-        self.assertEqual(receipt["retriever_id"], "token-overlap-set-v1")
+        self.assertEqual(receipt["retriever_id"], "token-overlap-set-v2")
         self.assertEqual(len(receipt["corpus_digest"]), 64)
         self.assertTrue(receipt["sources"])
         self.assertIn("path", receipt["sources"][0])
@@ -39,6 +39,16 @@ class SearchDocsTests(unittest.TestCase):
         self.assertEqual(receipt["sources"], [])
         self.assertEqual(receipt["context_document_count"], 0)
         self.assertEqual(receipt["context_characters"], 0)
+
+    def test_stopwords_alone_do_not_retrieve(self) -> None:
+        # Overlap only on function words must return no context, so a control query whose content
+        # words are absent from the corpus is not answered on "the", "is", and "of" alone.
+        receipt = search_docs.retrieve(
+            "what is the of it",
+            ROOT / "samples" / "rag" / "corpus",
+        )
+        self.assertEqual(receipt["retrieval_outcome"], "no_context")
+        self.assertEqual(receipt["sources"], [])
 
     def test_digest_changes_with_corpus_state(self) -> None:
         with tempfile.TemporaryDirectory(prefix="rag-corpus-") as directory:

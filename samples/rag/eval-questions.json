@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "retriever_id": "token-overlap-set-v2",
+  "about": "Frozen, human-ratified retrieval benchmark over the synthetic corpus. Verdicts are judged against the retrieved CONTEXT text, never the filename or score, and are bound to the retriever_id above: a different retriever or corpus digest invalidates the verdicts and the set must be re-judged. Three cohorts, scored differently. curated-in-corpus: the answer genuinely lives in a corpus document, so a miss is a real recall failure; these are the primary recall metric. coverage-gap: the answer exists but only outside the indexed surface (here, in tool code the .md corpus does not contain), so a miss is a corpus-coverage limitation, not a retrieval failure, and is tracked off the headline. absent-control: the answer is nowhere, so any retrieval hit is a false positive and must be judged false.",
+  "questions": [
+    {
+      "id": "verify-independently",
+      "prompt": "How is desired state verified?",
+      "cohort": "curated-in-corpus",
+      "answer_token": "independently"
+    },
+    {
+      "id": "report-contents",
+      "prompt": "What file states does the report summarize?",
+      "cohort": "curated-in-corpus",
+      "answer_token": "drifted"
+    },
+    {
+      "id": "evidence-reach",
+      "prompt": "Can a control be wired and firing and still fail?",
+      "cohort": "curated-in-corpus",
+      "answer_token": "reach"
+    },
+    {
+      "id": "evidence-test-shape",
+      "prompt": "What should a test include to prove a control works?",
+      "cohort": "curated-in-corpus",
+      "answer_token": "observation"
+    },
+    {
+      "id": "agent-authority",
+      "prompt": "Does shared enforcement transfer project authority?",
+      "cohort": "curated-in-corpus",
+      "answer_token": "authority"
+    },
+    {
+      "id": "agent-sequencing",
+      "prompt": "Who owns implementation sequencing?",
+      "cohort": "curated-in-corpus",
+      "answer_token": "sequencing"
+    },
+    {
+      "id": "coverage-gap-ranking",
+      "prompt": "What exact ranking function does the retriever implement?",
+      "cohort": "coverage-gap",
+      "answer_token": null
+    },
+    {
+      "id": "absent-geography",
+      "prompt": "What is the capital of France?",
+      "cohort": "absent-control",
+      "answer_token": null
+    },
+    {
+      "id": "absent-infra",
+      "prompt": "How do I configure a message queue broker?",
+      "cohort": "absent-control",
+      "answer_token": null
+    }
+  ]
+}

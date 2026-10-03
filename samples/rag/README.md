@@ -40,3 +40,32 @@ python3 tools/plan_index_refresh.py sample-project
 
 The output must contain both owned indexes and exclude the unrelated repository's index. This tool
 only prints a plan. It does not install hooks, run models, or write queue state.
+
+## Retrieval evaluation
+
+Retrieval quality is measured, not assumed. `tools/eval_retrieval.py` scores a frozen question set
+(`eval-questions.json`) over the synthetic corpus, reusing the same `search_docs` retrieval path
+rather than a second retriever:
+
+```sh
+python3 tools/eval_retrieval.py
+```
+
+The discipline it demonstrates:
+
+- Judge the context, not the filename. A question is a hit only if its answer appears in the text
+  the retrieval surfaced. Retrieving a topically named document whose shown window omits the answer
+  is a miss, not a hit.
+- Three cohorts, scored differently. `curated-in-corpus` answers genuinely live in the corpus, so a
+  miss is a real recall failure and these are the primary metric. `coverage-gap` answers live only
+  outside the indexed surface, so a miss is a coverage limitation tracked off the headline rather
+  than a retrieval failure. `absent-control` answers are nowhere, so any retrieval is a false
+  positive.
+- Bind the verdicts to the retriever identity. The set records the `retriever_id` it was judged
+  against; changing tokenization, scoring, ordering, or context selection bumps that id, and the
+  tool refuses to trust stale verdicts until the set is re-judged. This is the same reason scores
+  are never compared across corpus digests.
+
+Measure before adopting a retrieval change: run the frozen set on the current retriever, change one
+variable, re-run, and keep the change only if the primary cohort improves with no regression and the
+controls stay rejected.
