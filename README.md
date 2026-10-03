@@ -57,6 +57,14 @@ exit. It does not write to your home directory or change any operating-system se
 See `docs/QUICKSTART.md` for the Windows commands, the adoption-bundle builder, the supervised-update
 and managed-job exercises, and the cross-platform evidence matrix.
 
+## Adopt it
+
+This repository is meant to be adapted, not only read. Run the demo, then take one component at a
+time into your own configuration. `tools/adopt.py` builds a reviewable starter bundle outside this
+repository, dry-run by default, and `docs/ADAPTATION_GUIDE.md` walks through adding a component,
+adopting the agent policy, and adopting retrieval. The reference never installs into your live tool
+or home configuration: you review the bundle and apply it yourself.
+
 ## Repository map
 
 - `registry/components.json`, `profiles/demo.json`: the single source of truth for demo components
