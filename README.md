@@ -96,3 +96,8 @@ records every capability, what the reference keeps, and what it deliberately omi
 
 Spectre and Eidolon appear only as recognizable, sanitized governance case studies, with no private
 implementation.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The patterns here are meant to be copied and adapted into your own
+configuration; the license is permissive so you can.

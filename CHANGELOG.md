@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.3 - 2026-10-02
+
+- Add an MIT LICENSE. Without it the public repository defaulted to all-rights-reserved, which
+  contradicted its teaching-and-adoption purpose: an adopter had no legal right to reuse the code
+  the repo exists to be adopted from.
+- Add `docs/PARITY.md`, a parity-state ledger recording the last audit date, the private reference
+  point it was verified against, and the cadence and change-driven triggers for the next re-audit.
+
 ## 0.6.2 - 2026-10-02
 
 - Frame the retrieval-evaluation verdict honestly: the answer token is a frozen human judgment and
