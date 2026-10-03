@@ -11,6 +11,12 @@ bundles no model. The point it teaches: a retrieval "hit" is only a hit if the a
 the model was shown, recall on answers that genuinely live in the corpus is the metric that matters,
 a question whose answer is outside the indexed surface is a coverage gap rather than a recall
 failure, and a control query whose answer is nowhere must come back empty.
+
+The verdict is a stand-in, not an automation. Each curated answer_token is a human's frozen judgment
+of what a correct retrieval must contain. Checking it is reproducible, but in the real pipeline a
+person judges each retrieval against the context, because a relevance score or a keyword match
+cannot tell an answer from a mere mention. Read a token match as encoded human judgment, not as a
+rule that makes the verdict automatable.
 """
 
 from __future__ import annotations

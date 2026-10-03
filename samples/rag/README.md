@@ -53,9 +53,12 @@ python3 tools/eval_retrieval.py
 
 The discipline it demonstrates:
 
-- Judge the context, not the filename. A question is a hit only if its answer appears in the text
-  the retrieval surfaced. Retrieving a topically named document whose shown window omits the answer
-  is a miss, not a hit.
+- Judge the context, not the filename, and judge it by hand. A question is a hit only if its answer
+  appears in the text the retrieval surfaced; retrieving a topically named document whose shown
+  window omits the answer is a miss. In the real system a person makes that call, because a
+  relevance score or a keyword match cannot tell an answer from a mere mention. The answer token in
+  `eval-questions.json` is that human verdict frozen so the demo runs reproducibly, not a claim the
+  verdict can be automated.
 - Three cohorts, scored differently. `curated-in-corpus` answers genuinely live in the corpus, so a
   miss is a real recall failure and these are the primary metric. `coverage-gap` answers live only
   outside the indexed surface, so a miss is a coverage limitation tracked off the headline rather
