@@ -164,9 +164,16 @@ def retrieve(query: str, corpus: Path, limit: int = 3) -> dict[str, object]:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("query")
-    parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
-    parser.add_argument("--limit", type=int, default=3)
+    parser.add_argument("query", help="Question to retrieve context for")
+    parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=DEFAULT_CORPUS,
+        help="Markdown corpus directory (default: samples/rag/corpus)",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=3, help="Most documents to return; at least 1 (default: 3)"
+    )
     parser.add_argument(
         "--requirement-id",
         required=True,

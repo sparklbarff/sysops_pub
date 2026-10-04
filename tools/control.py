@@ -432,8 +432,18 @@ def _report(states: Sequence[FileState], target: Path, as_json: bool) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
-    parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
+    parser.add_argument(
+        "--registry",
+        type=Path,
+        default=DEFAULT_REGISTRY,
+        help="Component registry to read (default: registry/components.json)",
+    )
+    parser.add_argument(
+        "--profile",
+        type=Path,
+        default=DEFAULT_PROFILE,
+        help="Desired-state profile that selects components (default: profiles/demo.json)",
+    )
     parser.add_argument(
         "--component",
         action="append",
@@ -443,15 +453,27 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init_parser = subparsers.add_parser("init", help="Create an empty marked sandbox")
-    init_parser.add_argument("--target", required=True)
+    init_parser.add_argument(
+        "--target",
+        required=True,
+        help="New, empty, or already marked directory to use as the sandbox",
+    )
 
-    for command in ("plan", "apply", "verify", "report"):
-        subparser = subparsers.add_parser(command)
-        subparser.add_argument("--target", required=True)
+    phases = {
+        "plan": "Compare desired files to the target without writing",
+        "apply": "Preview the writes; with --execute, write inside the marked sandbox",
+        "verify": "Independently recompute expected hashes and compare the target",
+        "report": "Summarize matched, missing, drifted, and unmanaged files",
+    }
+    for command, summary in phases.items():
+        subparser = subparsers.add_parser(command, help=summary)
+        subparser.add_argument("--target", required=True, help="Marked sandbox directory")
         if command == "apply":
-            subparser.add_argument("--execute", action="store_true")
+            subparser.add_argument(
+                "--execute", action="store_true", help="Write; without it, apply only previews"
+            )
         if command == "report":
-            subparser.add_argument("--json", action="store_true")
+            subparser.add_argument("--json", action="store_true", help="Print the report as JSON")
     return parser
 
 

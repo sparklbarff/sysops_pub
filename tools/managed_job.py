@@ -136,9 +136,19 @@ def run_managed(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--receipt", required=True)
-    parser.add_argument("--timeout", type=float)
-    parser.add_argument("command", nargs=argparse.REMAINDER)
+    parser.add_argument(
+        "--receipt",
+        required=True,
+        help="Path for the sanitized receipt; must be new and outside this repository",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        help="Seconds before the owned process group is terminated; positive",
+    )
+    parser.add_argument(
+        "command", nargs=argparse.REMAINDER, help="The command to run in the foreground"
+    )
     return parser
 
 

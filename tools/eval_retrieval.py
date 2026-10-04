@@ -106,8 +106,18 @@ def evaluate(questions_path: Path, corpus: Path) -> dict[str, object]:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS)
-    parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
+    parser.add_argument(
+        "--questions",
+        type=Path,
+        default=DEFAULT_QUESTIONS,
+        help="Frozen question set (default: samples/rag/eval-questions.json)",
+    )
+    parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=DEFAULT_CORPUS,
+        help="Markdown corpus directory (default: samples/rag/corpus)",
+    )
     return parser
 
 

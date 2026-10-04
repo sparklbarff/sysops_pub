@@ -76,8 +76,13 @@ def plan_refresh(registry: Path, repository: str) -> dict[str, object]:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("repository")
-    parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
+    parser.add_argument("repository", help="Symbolic repository identity to plan for")
+    parser.add_argument(
+        "--registry",
+        type=Path,
+        default=DEFAULT_REGISTRY,
+        help="Index registry to read (default: samples/rag/indexes.json)",
+    )
     return parser
 
 

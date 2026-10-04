@@ -247,16 +247,26 @@ def apply(
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    init_parser = subparsers.add_parser("init")
-    init_parser.add_argument("target")
-    init_parser.add_argument("--execute", action="store_true")
-    check_parser = subparsers.add_parser("check")
-    check_parser.add_argument("target")
-    check_parser.add_argument("--channel")
-    apply_parser = subparsers.add_parser("apply")
-    apply_parser.add_argument("target")
-    apply_parser.add_argument("--channel", required=True)
-    apply_parser.add_argument("--execute", action="store_true")
+    init_parser = subparsers.add_parser(
+        "init", help="Create a synthetic update sandbox in a new or empty directory"
+    )
+    init_parser.add_argument("target", help="New or empty directory for the sandbox")
+    init_parser.add_argument(
+        "--execute", action="store_true", help="Create it; without this, only preview"
+    )
+    check_parser = subparsers.add_parser(
+        "check", help="List available updates for every channel, or one, without writing"
+    )
+    check_parser.add_argument("target", help="Synthetic update sandbox directory")
+    check_parser.add_argument("--channel", help="Check only this update channel")
+    apply_parser = subparsers.add_parser(
+        "apply", help="Update one named channel, deferring running items, with a receipt"
+    )
+    apply_parser.add_argument("target", help="Synthetic update sandbox directory")
+    apply_parser.add_argument("--channel", required=True, help="The one channel to update")
+    apply_parser.add_argument(
+        "--execute", action="store_true", help="Apply the update; without this, only preview"
+    )
     return parser
 
 

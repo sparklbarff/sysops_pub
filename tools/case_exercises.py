@@ -63,7 +63,13 @@ def eidolon_result() -> dict[str, object]:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("case", choices=("all", "eidolon", "spectre"), default="all", nargs="?")
+    parser.add_argument(
+        "case",
+        choices=("all", "eidolon", "spectre"),
+        default="all",
+        nargs="?",
+        help="Which case-study exercise to run (default: all)",
+    )
     return parser
 
 

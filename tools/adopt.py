@@ -282,9 +282,21 @@ def _build_parser() -> argparse.ArgumentParser:
     where = parser.add_mutually_exclusive_group(required=True)
     where.add_argument("--target", help="build a reviewable bundle at a NEW path outside this repo")
     where.add_argument("--into", help="install into an EXISTING project (merges settings.json)")
-    parser.add_argument("--tool", choices=("both", "claude-code", "codex"), default="both")
-    parser.add_argument("--platform", choices=("auto", "posix", "windows"), default="auto")
-    parser.add_argument("--execute", action="store_true")
+    parser.add_argument(
+        "--tool",
+        choices=("both", "claude-code", "codex"),
+        default="both",
+        help="which starters to produce (default: both)",
+    )
+    parser.add_argument(
+        "--platform",
+        choices=("auto", "posix", "windows"),
+        default="auto",
+        help="hook command flavour for the Claude Code settings (default: auto, from this host)",
+    )
+    parser.add_argument(
+        "--execute", action="store_true", help="write; without it, adopt only previews"
+    )
     return parser
 
 

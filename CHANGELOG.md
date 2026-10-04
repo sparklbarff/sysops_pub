@@ -19,6 +19,9 @@
   prints the part number, date code, and the full commit as a 160-bit field, and a colophon. An
   Errata sheet is generated from every tool option that ships without help text, and an optional
   `site/eggs.js` adds a keyboard reference behind `?`.
+- Give every option, argument, and subcommand of the eight argparse tools help text, and add a test
+  that fails if any parser action ships without it. Help strings only; no behaviour change. The
+  generated manual pages no longer have blank entries, and the Errata sheet is empty.
 
 ## 0.7.0 - 2026-10-02
 
