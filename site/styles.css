@@ -772,6 +772,38 @@ h3 {
   white-space: pre-wrap;
 }
 
+/* ── Recorded sessions ─────────────────────────────────────────────────────────────── */
+
+.session {
+  margin-top: 40px;
+}
+
+.session .note {
+  max-width: var(--measure);
+  margin: 0 0 12px;
+}
+
+.terminal pre {
+  max-height: 70vh;
+  overflow: auto;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.terminal .prompt {
+  color: var(--panel-mute);
+  user-select: none;
+}
+
+.terminal .typed {
+  color: #fff;
+  font-weight: 700;
+}
+
+.terminal .status {
+  color: #ec5245;
+}
+
 /* ── Manual pages ────────────────────────────────────────────────────────────────────── */
 
 .manpage {
@@ -1301,6 +1333,10 @@ kbd {
 
   .manpage {
     font-size: 0.9375rem;
+  }
+
+  .terminal pre {
+    font-size: 0.8125rem;
   }
 
   .manrun span:last-child {

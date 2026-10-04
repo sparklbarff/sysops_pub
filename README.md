@@ -109,6 +109,10 @@ records every capability, what the reference keeps, and what it deliberately omi
 Spectre and Eidolon appear only as recognizable, sanitized governance case studies, with no private
 implementation.
 
+The private system's local retrieval runs on a FAISS index and an Ollama model pipeline; this
+reference reimplements the same retrieval contract over a synthetic corpus with no model or index
+dependency, so the engine itself is not bundled (see the capability matrix).
+
 ## License
 
 MIT, see [LICENSE](LICENSE). The patterns here are meant to be copied and adapted into your own

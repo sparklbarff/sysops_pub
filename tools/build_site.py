@@ -19,6 +19,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -642,6 +643,201 @@ def render_man(page: ManPage, examples: list[str], see_also: list[tuple[str, str
 
 
 # --------------------------------------------------------------------------------------------
+# Recorded sessions: every tool, really run, in a fresh clone of the commit
+
+
+@dataclass(frozen=True)
+class Step:
+    """One command typed at the prompt; ``shell`` steps are setup shown as typed."""
+
+    command: str
+    shell: bool = False
+    expect: tuple[int, ...] = (0,)
+
+
+SESSIONS: dict[str, tuple[Step, ...]] = {
+    "demo": (Step("python3 tools/demo.py"),),
+    "control": (
+        Step("python3 tools/control.py init --target ../sandbox"),
+        Step("python3 tools/control.py plan --target ../sandbox"),
+        Step("python3 tools/control.py apply --target ../sandbox"),
+        Step("python3 tools/control.py apply --target ../sandbox --execute"),
+        Step("python3 tools/control.py verify --target ../sandbox"),
+        Step("python3 tools/control.py report --target ../sandbox"),
+    ),
+    "adopt": (
+        Step("mkdir ../my-project", shell=True),
+        Step("python3 tools/adopt.py --into ../my-project --tool both"),
+        Step("python3 tools/adopt.py --into ../my-project --tool both --execute"),
+        Step("python3 tools/adopt.py --into ../my-project --tool both --execute"),
+    ),
+    "bootstrap": (
+        Step("python3 tools/bootstrap.py --check", expect=(2,)),
+        Step("python3 tools/bootstrap.py"),
+        Step("python3 tools/bootstrap.py --execute"),
+        Step("python3 tools/bootstrap.py --check"),
+    ),
+    "update_supervisor": (
+        Step("python3 tools/update_supervisor.py init ../update-demo"),
+        Step("python3 tools/update_supervisor.py init ../update-demo --execute"),
+        Step("python3 tools/update_supervisor.py check ../update-demo"),
+        Step("python3 tools/update_supervisor.py apply ../update-demo --channel cli-tools"),
+        Step(
+            "python3 tools/update_supervisor.py apply ../update-demo --channel cli-tools --execute"
+        ),
+    ),
+    "managed_job": (
+        Step(
+            "python3 tools/managed_job.py --receipt ../managed-job.json --timeout 60 -- "
+            "python3 tools/plan_index_refresh.py sample-project"
+        ),
+        Step("cat ../managed-job.json", shell=True),
+    ),
+    "search_docs": (
+        Step(
+            'python3 tools/search_docs.py "How is desired state verified?" '
+            "--requirement-id demo-orientation-001"
+        ),
+    ),
+    "eval_retrieval": (Step("python3 tools/eval_retrieval.py"),),
+    "plan_index_refresh": (Step("python3 tools/plan_index_refresh.py sample-project"),),
+    "case_exercises": (Step("python3 tools/case_exercises.py all"),),
+}
+SESSION_TIMEOUT = 180
+
+
+@dataclass(frozen=True)
+class Exchange:
+    command: str
+    output: str
+    status: int
+
+
+def _sanitize(text: str, roots: Sequence[str]) -> str:
+    for root in sorted(set(roots), key=len, reverse=True):
+        text = text.replace(root, "/tmp/session")
+    return text
+
+
+def _disclosure_patterns() -> dict[str, re.Pattern[str]]:
+    path = REPO_ROOT / "scripts" / "disclosure_scan.py"
+    spec = importlib.util.spec_from_file_location("_session_disclosure", path)
+    if spec is None or spec.loader is None:
+        raise BuildError("cannot load scripts/disclosure_scan.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(spec.name, None)
+    return module.TEXT_PATTERNS
+
+
+def record_sessions(commit: Commit) -> dict[str, list[Exchange]]:
+    """Clone the commit into a temporary directory and run every session there, for real.
+
+    Nothing runs against this working tree. Output is published, so every absolute path is
+    replaced with /tmp/session and the result must pass the repository's own disclosure
+    patterns; a match fails the build rather than publishing it.
+    """
+    patterns = _disclosure_patterns()
+    recorded: dict[str, list[Exchange]] = {}
+    with tempfile.TemporaryDirectory(prefix="sysops-pub-sessions-") as directory:
+        root = Path(directory)
+        scratch = root / "tmp"
+        scratch.mkdir()
+        roots = [directory, os.path.realpath(directory)]
+        clone = root / "sysops_pub"
+        subprocess.run(
+            ["git", "clone", "--quiet", "--no-local", str(REPO_ROOT), str(clone)],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "--quiet", "--detach", commit.sha],
+            cwd=clone,
+            check=True,
+            capture_output=True,
+        )
+        environment = {
+            "PATH": os.environ.get("PATH", ""),
+            "HOME": str(root),
+            "TMPDIR": str(scratch),
+            "LANG": "C.UTF-8",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONUTF8": "1",
+            "COLUMNS": str(MAN_WIDTH),
+        }
+        for name, steps in SESSIONS.items():
+            exchanges = []
+            for step in steps:
+                argv = shlex.split(step.command)
+                if argv[0] == "python3":
+                    argv[0] = sys.executable
+                result = subprocess.run(
+                    argv,
+                    cwd=clone,
+                    env=environment,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=SESSION_TIMEOUT,
+                )
+                if result.returncode not in step.expect:
+                    raise BuildError(
+                        f"recorded session {name}: {step.command!r} returned "
+                        f"{result.returncode}, expected {step.expect}:\n"
+                        f"{result.stdout}{result.stderr}"
+                    )
+                output = _sanitize((result.stdout + result.stderr).rstrip(), roots)
+                for label, pattern in patterns.items():
+                    if pattern.search(output) or pattern.search(step.command):
+                        raise BuildError(
+                            f"recorded session {name} would publish a {label}; refusing"
+                        )
+                exchanges.append(Exchange(step.command, output, result.returncode))
+            recorded[name] = exchanges
+    return recorded
+
+
+def render_session(name: str, exchanges: list[Exchange], commit: Commit) -> str:
+    lines = []
+    for exchange in exchanges:
+        lines.append(
+            f'<span class="prompt">$ </span><span class="typed">{html.escape(exchange.command)}'
+            "</span>"
+        )
+        if exchange.output:
+            lines.append(html.escape(exchange.output))
+        if exchange.status:
+            lines.append(f'<span class="status">[exit {exchange.status}]</span>')
+    return (
+        f'<section class="session" id="session"><h2 class="label">Recorded session</h2>'
+        f'<p class="note">Run by the build in a fresh clone of commit {commit.short}, in a '
+        "temporary directory shown as <code>/tmp/session</code>. The output is the tools' own, "
+        "unedited apart from that path.</p>"
+        f'<div class="panel terminal"><pre><code>{chr(10).join(lines)}</code></pre></div>'
+        "</section>"
+    )
+
+
+def gate_session(output: str, sha: str) -> list[Exchange]:
+    """The release gate's own output, as the build captured it, reduced to its verdict lines."""
+    kept = [
+        line
+        for line in output.splitlines()
+        if line.startswith(("PASS: ", "FAIL: ", "SKIP: ", "check: ", "release verification"))
+    ]
+    return [
+        Exchange(
+            f"python3 tools/verify_release.py --require-tools --candidate-sha {sha}",
+            "\n".join(kept),
+            0,
+        )
+    ]
+
+
+# --------------------------------------------------------------------------------------------
 # Page assembly
 
 
@@ -1153,7 +1349,7 @@ def render_errata(site: Site, pages: list[ManPage]) -> str:
 # Release gate
 
 
-def run_gate(commit: Commit) -> dict[str, bool]:
+def run_gate(commit: Commit) -> tuple[dict[str, bool], str]:
     result = subprocess.run(
         [
             sys.executable,
@@ -1170,7 +1366,7 @@ def run_gate(commit: Commit) -> dict[str, bool]:
     output = result.stdout + result.stderr
     if result.returncode:
         raise BuildError(f"the release gate failed; nothing was built:\n{output}")
-    return parse_gate(output)
+    return parse_gate(output), output
 
 
 def parse_gate(output: str) -> dict[str, bool]:
@@ -1228,7 +1424,7 @@ def build(output: Path, *, release: bool, draft: bool) -> Path:
         if pushed.returncode:
             raise BuildError("a release build needs HEAD pushed to origin/main first")
     _check_output_target(output)
-    gate = run_gate(commit) if release else None
+    gate, gate_output = run_gate(commit) if release else (None, "")
     revisions = parse_revisions((REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
     site = Site(
         commit=commit,
@@ -1240,6 +1436,9 @@ def build(output: Path, *, release: bool, draft: bool) -> Path:
     )
 
     pages = [man_page(name) for name in COMMANDS]
+    sessions = record_sessions(commit)
+    if gate_output:
+        sessions["verify_release"] = gate_session(gate_output, commit.sha)
     contents = [
         (chapter.number, _plain(_title_of(chapter)), chapter.href, chapter.order)
         for chapter in ALL_PAGES
@@ -1263,7 +1462,9 @@ def build(output: Path, *, release: bool, draft: bool) -> Path:
             _write(staging, f"{chapter.slug}/index.html", page)
             for name in used:
                 mentions[name].append((f"{chapter.slug}(7)", chapter.href))
-        _write(staging, "commands/index.html", render_command_index(site, pages, sequence))
+        _write(
+            staging, "commands/index.html", render_command_index(site, pages, sequence, sessions)
+        )
         for index, page in enumerate(pages):
             previous = (
                 (f"{pages[index - 1].name}(1)", f"/commands/{pages[index - 1].name}/")
@@ -1276,6 +1477,8 @@ def build(output: Path, *, release: bool, draft: bool) -> Path:
                 else None
             )
             body = render_man(page, _examples(page.name), mentions[page.name])
+            if page.name in sessions:
+                body += render_session(page.name, sessions[page.name], commit)
             _write(
                 staging,
                 f"commands/{page.name}/index.html",
@@ -1324,18 +1527,28 @@ def _title_of(chapter: Chapter) -> str:
     return render_inline(match.group(1), Context(commit=Commit("", "", True), paths=frozenset()))
 
 
-def render_command_index(site: Site, pages: list[ManPage], sequence) -> str:
+def render_command_index(
+    site: Site, pages: list[ManPage], sequence, sessions: dict[str, list[Exchange]]
+) -> str:
     rows = "".join(
         f'<tr><td><a class="mono" href="/commands/{page.name}/">{page.name}(1)</a></td>'
-        f"<td>{html.escape(page.summary)}</td></tr>"
+        f"<td>{html.escape(page.summary)}</td><td>"
+        + (
+            f'<a href="/commands/{page.name}/#session">{len(sessions[page.name])} commands</a>'
+            if page.name in sessions
+            else "—"
+        )
+        + "</td></tr>"
         for page in pages
     )
     body = (
         '<article class="chapter"><p class="kicker">Commands</p><h1>Commands</h1>'
         "<p>Every tool in <code>tools/</code>, as a manual page generated from its own argument "
-        "parser and docstring.</p>"
+        "parser and docstring. Most pages end with a recorded session: the build runs the tool "
+        "in a fresh clone of this commit and prints exactly what it said.</p>"
         '<div class="table"><table><thead><tr><th scope="col">Page</th>'
-        f'<th scope="col">Name</th></tr></thead><tbody>{rows}</tbody></table></div></article>'
+        f'<th scope="col">Name</th><th scope="col">Recorded session</th></tr></thead>'
+        f"<tbody>{rows}</tbody></table></div></article>"
     )
     return _page(
         site,

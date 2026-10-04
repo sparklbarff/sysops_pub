@@ -290,6 +290,40 @@ class IdentityTests(unittest.TestCase):
                 self.assertEqual((page.name, flag) in found, not text)
 
 
+class SessionTests(unittest.TestCase):
+    """The recorded sessions are real runs in a fresh clone, and publish no host paths."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.sessions = build_site.record_sessions(build_site.read_commit())
+
+    def test_every_session_ran_every_step(self) -> None:
+        self.assertEqual(set(self.sessions), set(build_site.SESSIONS))
+        for name, steps in build_site.SESSIONS.items():
+            exchanges = self.sessions[name]
+            self.assertEqual([e.command for e in exchanges], [s.command for s in steps])
+            for exchange, step in zip(exchanges, steps, strict=True):
+                self.assertIn(exchange.status, step.expect)
+
+    def test_sessions_show_the_contracts_they_demonstrate(self) -> None:
+        control = "\n".join(e.output for e in self.sessions["control"])
+        self.assertIn("dry-run only: pass --execute to write", control)
+        self.assertIn("summary: match=2", control)
+        adopt = self.sessions["adopt"][-1].output
+        self.assertIn("UNCHANGED .claude/settings.json", adopt)
+        self.assertEqual(self.sessions["bootstrap"][0].status, 2)
+
+    def test_no_host_path_is_published(self) -> None:
+        text = "\n".join(e.output for exchanges in self.sessions.values() for e in exchanges)
+        for fragment in (str(ROOT), str(Path.home()), "/var/folders", "/private/"):
+            self.assertNotIn(fragment, text)
+        self.assertIn("/tmp/session", text)
+
+    def test_sanitize_replaces_the_longest_root_first(self) -> None:
+        text = build_site._sanitize("/private/x/y and /x/y", ["/x/y", "/private/x/y"])
+        self.assertEqual(text, "/tmp/session and /tmp/session")
+
+
 class BuildTests(unittest.TestCase):
     def test_output_target_refuses_the_repository_and_unrelated_directories(self) -> None:
         with self.assertRaises(build_site.BuildError):
@@ -324,6 +358,7 @@ class BuildTests(unittest.TestCase):
                 self.assertIsNone(re.search(r"\$[a-z_]+", re.sub(r"<pre.*?</pre>", "", html)))
                 for name, href in collector.attributes:
                     if name == "href" and href and href.startswith("/"):
+                        href = href.split("#", 1)[0]
                         target = output / href.lstrip("/")
                         if href.endswith("/"):
                             target = target / "index.html"

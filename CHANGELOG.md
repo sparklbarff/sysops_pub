@@ -22,6 +22,16 @@
 - Give every option, argument, and subcommand of the eight argparse tools help text, and add a test
   that fails if any parser action ships without it. Help strings only; no behaviour change. The
   generated manual pages no longer have blank entries, and the Errata sheet is empty.
+- Demonstrate the commands on the site: the build clones the commit into a temporary directory,
+  really runs each tool's session there (control loop, adoption, bootstrap, supervised update,
+  managed job, retrieval, evaluation, case exercises, and the tour), and prints the unedited output
+  on its manual page. Absolute paths are replaced with `/tmp/session`, and a session that would
+  publish anything the disclosure scan forbids fails the build. Release builds also show the
+  release gate's own verdict lines on `verify_release(1)`.
+- Make every page fit a phone: wrapped listings, narrow manual synopses, stacked data-sheet
+  tables, a wrapping thumb index, and a pin description table in place of the pinout drawing.
+- Name the local retrieval engine (FAISS and Ollama) on the front page as deliberately not
+  bundled.
 
 ## 0.7.0 - 2026-10-02
 
