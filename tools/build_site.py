@@ -1045,9 +1045,12 @@ def errata(pages: list[ManPage]) -> list[tuple[str, str]]:
         for flag, text in page.arguments + page.options:
             if not text:
                 found.append((page.name, flag))
-        for command, text, _ in page.commands:
+        for command, text, options in page.commands:
             if not text:
                 found.append((page.name, command))
+            for flag, help_text in options:
+                if not help_text:
+                    found.append((page.name, f"{command} {flag}"))
     return found
 
 
