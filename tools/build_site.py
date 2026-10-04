@@ -800,6 +800,17 @@ def record_sessions(commit: Commit) -> dict[str, list[Exchange]]:
     return recorded
 
 
+CLONE_NOTE = (
+    "Run by the build in a fresh clone of commit {short}, in a temporary directory shown as "
+    "<code>/tmp/session</code>. The output is the tools' own, unedited apart from that path."
+)
+GATE_NOTE = (
+    "The release gate exactly as this build ran it on commit {short}, before writing any page, "
+    "reduced to its own verdict lines. A failing check stops the build, so this page cannot "
+    "exist with a FAIL in it."
+)
+
+
 def render_session(name: str, exchanges: list[Exchange], commit: Commit) -> str:
     lines = []
     for exchange in exchanges:
@@ -813,9 +824,7 @@ def render_session(name: str, exchanges: list[Exchange], commit: Commit) -> str:
             lines.append(f'<span class="status">[exit {exchange.status}]</span>')
     return (
         f'<section class="session" id="session"><h2 class="label">Recorded session</h2>'
-        f'<p class="note">Run by the build in a fresh clone of commit {commit.short}, in a '
-        "temporary directory shown as <code>/tmp/session</code>. The output is the tools' own, "
-        "unedited apart from that path.</p>"
+        f'<p class="note">{(GATE_NOTE if name == "verify_release" else CLONE_NOTE).format(short=commit.short)}</p>'
         f'<div class="panel terminal"><pre><code>{chr(10).join(lines)}</code></pre></div>'
         "</section>"
     )
@@ -823,10 +832,16 @@ def render_session(name: str, exchanges: list[Exchange], commit: Commit) -> str:
 
 def gate_session(output: str, sha: str) -> list[Exchange]:
     """The release gate's own output, as the build captured it, reduced to its verdict lines."""
+    # verify_release's own verdicts; nested test output (which exercises the gate with
+    # fixture SHAs) is left out so the excerpt describes this commit only.
     kept = [
         line
         for line in output.splitlines()
-        if line.startswith(("PASS: ", "FAIL: ", "SKIP: ", "check: ", "release verification"))
+        if line.startswith(("PASS: ", "FAIL: ", "SKIP: ", "release verification"))
+        and not (
+            line.startswith("PASS: candidate identity")
+            and line != f"PASS: candidate identity ({sha})"
+        )
     ]
     return [
         Exchange(

@@ -319,6 +319,17 @@ class SessionTests(unittest.TestCase):
             self.assertNotIn(fragment, text)
         self.assertIn("/tmp/session", text)
 
+    def test_gate_excerpt_keeps_only_this_commits_verdicts(self) -> None:
+        output = (
+            "PASS: candidate identity (abc)\ncheck: black\nPASS: candidate identity (abc123)\n"
+            "PASS: black\nrelease verification: pass\n"
+        )
+        excerpt = build_site.gate_session(output, "abc")[0].output.splitlines()
+        self.assertEqual(
+            excerpt,
+            ["PASS: candidate identity (abc)", "PASS: black", "release verification: pass"],
+        )
+
     def test_sanitize_replaces_the_longest_root_first(self) -> None:
         text = build_site._sanitize("/private/x/y and /x/y", ["/x/y", "/private/x/y"])
         self.assertEqual(text, "/tmp/session and /tmp/session")
