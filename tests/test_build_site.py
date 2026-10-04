@@ -255,6 +255,41 @@ class RevisionAndGateTests(unittest.TestCase):
         self.assertEqual(rendered.count("<td class='max'>0</td>"), len(build_site.RATINGS))
 
 
+class IdentityTests(unittest.TestCase):
+    def test_part_number_and_date_code(self) -> None:
+        self.assertEqual(build_site.part_number("0.8.0"), "SOP-0800")
+        self.assertEqual(build_site.part_number("0.6.3"), "SOP-0603")
+        self.assertEqual(build_site.date_code("2026-10-03"), "2640")
+        self.assertEqual(build_site.date_code("2027-01-01"), "2653")
+
+    def test_bit_field_decodes_back_to_the_commit(self) -> None:
+        rows = build_site.bit_rows(COMMIT.sha)
+        self.assertEqual(len(rows), 4)
+        decoded = "".join(
+            format(int("".join(row[column] for row in rows), 2), "x")
+            for column in range(len(COMMIT.sha))
+        )
+        self.assertEqual(decoded, COMMIT.sha)
+
+    def test_pinout_has_every_page_and_command_once(self) -> None:
+        left, right = build_site.pin_map()
+        self.assertEqual((len(left), len(right)), (16, 16))
+        hrefs = [href for _, href in left + right if href]
+        self.assertEqual(len(hrefs), len(set(hrefs)))
+        for chapter in build_site.ALL_PAGES:
+            self.assertIn(chapter.href, hrefs)
+        for name in build_site.COMMANDS:
+            self.assertIn(f"/commands/{name}/", hrefs)
+        self.assertEqual((left[-1][0], right[-1][0]), ("GND", "VCC"))
+
+    def test_errata_are_read_from_the_parsers(self) -> None:
+        pages = [build_site.man_page(name) for name in build_site.COMMANDS]
+        found = build_site.errata(pages)
+        for page in pages:
+            for flag, text in page.options:
+                self.assertEqual((page.name, flag) in found, not text)
+
+
 class BuildTests(unittest.TestCase):
     def test_output_target_refuses_the_repository_and_unrelated_directories(self) -> None:
         with self.assertRaises(build_site.BuildError):
@@ -272,7 +307,7 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(stamp["release_gate"], "not run")
             self.assertEqual(len(stamp["commit"]), 40)
             pages = sorted(output.rglob("*.html"))
-            expected = 1 + len(build_site.ALL_PAGES) + 1 + len(build_site.COMMANDS) + 1
+            expected = 1 + len(build_site.ALL_PAGES) + 1 + len(build_site.COMMANDS) + 2
             self.assertEqual(len(pages), expected)
             for page in pages:
                 html = page.read_text(encoding="utf-8")
@@ -281,7 +316,8 @@ class BuildTests(unittest.TestCase):
                 self.assertNotIn("style", names, page)
                 self.assertNotIn("style", collector.tags, page)
                 self.assertEqual(
-                    [src for name, src in collector.attributes if name == "src"], ["/theme.js"]
+                    [src for name, src in collector.attributes if name == "src"],
+                    ["/theme.js", "/eggs.js"],
                 )
                 ids = [value for name, value in collector.attributes if name == "id"]
                 self.assertEqual(len(ids), len(set(ids)), page)
@@ -292,7 +328,7 @@ class BuildTests(unittest.TestCase):
                         if href.endswith("/"):
                             target = target / "index.html"
                         self.assertTrue(target.is_file(), f"{page}: broken link {href}")
-            for name in ("404.html", "styles.css", "theme.js", "vercel.json"):
+            for name in ("404.html", "errata/index.html", "styles.css", "theme.js", "eggs.js"):
                 self.assertTrue((output / name).is_file(), name)
             build_site.build(output, release=False, draft=True)
             self.assertTrue((output / "deploy.json").is_file())

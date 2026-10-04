@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import datetime
 import hashlib
 import html
 import importlib.util
@@ -32,7 +33,7 @@ SITE_SOURCE = REPO_ROOT / "site"
 DEFAULT_OUTPUT = REPO_ROOT / "_site"
 REPOSITORY_URL = "https://github.com/sparklbarff/sysops_pub"
 OUTPUT_MARKER = "deploy.json"
-STATIC_FILES = ("styles.css", "theme.js", "favicon.svg", "vercel.json", "robots.txt")
+STATIC_FILES = ("styles.css", "theme.js", "eggs.js", "favicon.svg", "vercel.json", "robots.txt")
 STATIC_DIRECTORIES = ("fonts",)
 MAN_WIDTH = 76
 
@@ -51,6 +52,7 @@ class Chapter:
     order: str
     source: str
     slug: str
+    pin: str
 
     @property
     def href(self) -> str:
@@ -58,18 +60,18 @@ class Chapter:
 
 
 CHAPTERS = (
-    Chapter("1", "SOP-100", "docs/ARCHITECTURE.md", "architecture"),
-    Chapter("2", "SOP-110", "docs/QUICKSTART.md", "quickstart"),
-    Chapter("3", "SOP-120", "docs/ADAPTATION_GUIDE.md", "adaptation"),
-    Chapter("4", "SOP-130", "docs/CAPABILITY_MATRIX.md", "capability-matrix"),
-    Chapter("5", "SOP-200", "docs/SECURITY_BOUNDARY.md", "security-boundary"),
-    Chapter("6", "SOP-210", "docs/EXPORT_MANIFEST.md", "export-manifest"),
-    Chapter("7", "SOP-220", "docs/PARITY.md", "parity"),
-    Chapter("8", "SOP-300", "docs/MACOS_OPTIONAL.md", "macos"),
+    Chapter("1", "SOP-100", "docs/ARCHITECTURE.md", "architecture", "ARCH"),
+    Chapter("2", "SOP-110", "docs/QUICKSTART.md", "quickstart", "QSTART"),
+    Chapter("3", "SOP-120", "docs/ADAPTATION_GUIDE.md", "adaptation", "ADAPT"),
+    Chapter("4", "SOP-130", "docs/CAPABILITY_MATRIX.md", "capability-matrix", "CAPMAT"),
+    Chapter("5", "SOP-200", "docs/SECURITY_BOUNDARY.md", "security-boundary", "SECBND"),
+    Chapter("6", "SOP-210", "docs/EXPORT_MANIFEST.md", "export-manifest", "EXPORT"),
+    Chapter("7", "SOP-220", "docs/PARITY.md", "parity", "PARITY"),
+    Chapter("8", "SOP-300", "docs/MACOS_OPTIONAL.md", "macos", "MACOS"),
 )
 APPENDICES = (
-    Chapter("A", "SOP-900", "CHANGELOG.md", "revisions"),
-    Chapter("B", "SOP-910", "LICENSE", "license"),
+    Chapter("A", "SOP-900", "CHANGELOG.md", "revisions", "REVS"),
+    Chapter("B", "SOP-910", "LICENSE", "license", "LIC"),
 )
 HOME_SOURCE = "README.md"
 # Tracked documents deliberately left out of the manual, with the reason.
@@ -633,6 +635,7 @@ class Site:
     paths: frozenset[str]
     gate: dict[str, bool] | None
     template: Template
+    titles: dict[str, str] = field(default_factory=dict)
 
 
 def _plain(fragment: str) -> str:
@@ -644,6 +647,50 @@ def _description(text: str, limit: int = 158) -> str:
     return plain if len(plain) <= limit else plain[:limit].rsplit(" ", 1)[0] + "…"
 
 
+TABS = (
+    ("0", "Overview", "/"),
+    *((chapter.number, "", chapter.href) for chapter in ALL_PAGES),
+    ("Cmd", "Commands", "/commands/"),
+)
+
+
+def render_tabs(current: str, titles: dict[str, str]) -> str:
+    """The thumb index: one tab per chapter, cut into the page edge like a printed manual."""
+    tabs = []
+    for key, name, href in TABS:
+        label = name or titles.get(key, key)
+        attributes = ' aria-current="page"' if key == current else ""
+        tabs.append(
+            f'<li><a class="tab" href="{href}"{attributes}><span class="tab-key">{key}</span>'
+            f'<span class="tab-name">{html.escape(label)}</span></a></li>'
+        )
+    return f'<nav class="thumbs" aria-label="Chapters"><ol>{"".join(tabs)}</ol></nav>'
+
+
+def bit_rows(sha: str) -> list[str]:
+    """The commit as four rows of bits, one column per hex digit, most significant bit on top."""
+    return [
+        "".join("1" if int(digit, 16) & weight else "0" for digit in sha) for weight in (8, 4, 2, 1)
+    ]
+
+
+def colophon(site: Site) -> str:
+    grid = "\n".join(
+        "    " + row.replace("1", "\u2588").replace("0", "\u00b7")
+        for row in bit_rows(site.commit.sha)
+    )
+    hexes = "    " + site.commit.sha
+    return (
+        "<!--\n"
+        f"  sysops_pub reference manual · rev {site.version} · {part_number(site.version)}\n"
+        f"  commit {site.commit.sha}\n\n{grid}\n{hexes}\n\n"
+        "  Built by tools/build_site.py from the tracked documents; nothing here is hand-copied.\n"
+        "  Each column above is one hex digit of the commit, most significant bit on top.\n"
+        "  Press ? on any page. Errata, if any, are at /errata/.\n"
+        "-->"
+    )
+
+
 def _page(
     site: Site,
     *,
@@ -652,6 +699,7 @@ def _page(
     center: str,
     order: str,
     body: str,
+    tab: str = "",
     previous: tuple[str, str] | None = None,
     following: tuple[str, str] | None = None,
     front: bool = False,
@@ -665,11 +713,14 @@ def _page(
         return f'<a rel="{rel}" href="{href}">{arrow}{html.escape(label)}{tail}</a>'
 
     return site.template.substitute(
+        colophon=colophon(site),
         page_title=html.escape(f"{title} · sysops_pub reference manual"),
         description=html.escape(_description(lede)),
+        build=html.escape(f"{site.commit.sha} {site.version} {site.commit.date}"),
         body_class="front" if front else "inner",
         center=html.escape(center),
         order=html.escape(order),
+        tabs=render_tabs(tab, site.titles),
         version=html.escape(site.version),
         date=site.commit.date,
         body=body,
@@ -710,7 +761,9 @@ def render_ratings(site: Site) -> str:
     )
 
 
-def render_home(site: Site, contents: list[tuple[str, str, str, str]], pages: list[ManPage]) -> str:
+def render_home(
+    site: Site, contents: list[tuple[str, str, str, str]], pages: list[ManPage]
+) -> tuple[str, set[str]]:
     text = (REPO_ROOT / HOME_SOURCE).read_text(encoding="utf-8")
     preamble, sections = split_sections(text)
     required = ("What it demonstrates", "Quick start")
@@ -749,23 +802,68 @@ def render_home(site: Site, contents: list[tuple[str, str, str, str]], pages: li
         + '<div class="ds-diagram"><h2 class="label">Functional block diagram</h2>'
         + figure.group(0)
         + "</div>"
-        f'<div class="ds-contents"><h2 class="label">Contents</h2><ol class="toc">{toc}</ol></div>'
+        + render_pinout(site)
+        + render_marking(site)
+        + f'<div class="ds-contents"><h2 class="label">Contents</h2><ol class="toc">{toc}</ol></div>'
         f'<div class="ds-typical"><h2 class="label">Typical application</h2>{quick.body}</div>'
         f'<div class="ds-commands"><h2 class="label">Commands</h2><ul class="cmdlist">{commands}'
         "</ul></div></section>"
-        f'<section class="overview">{remainder.body}</section>'
+        f'<section class="overview">{remainder.body}</section>' + render_colophon(site)
     )
     page = _page(
         site,
         title="Overview",
         lede=intro.lede,
         center=f"Rev {site.version} · {site.commit.date}",
-        order="Order no. SOP-000",
+        order=f"Order no. {part_number(site.version)}",
         body=body,
+        tab="0",
         following=(contents[0][1], contents[0][2]),
         front=True,
     )
     return page, context.commands
+
+
+def render_colophon(site: Site) -> str:
+    """The end of the front page: what this build is, how it was made, and its license."""
+    sha = site.commit.sha
+    gate = (
+        "Passed for this build; see the absolute maximum ratings."
+        if site.gate
+        else "Not run for this build. Release builds run it before anything is written."
+    )
+    rows = (
+        ("Revision", f"{site.version} · part number {part_number(site.version)}"),
+        (
+            "Commit",
+            f'<a class="mono" href="{REPOSITORY_URL}/tree/{sha}">{sha}</a>',
+        ),
+        ("Date", f"{site.commit.date} · date code {date_code(site.commit.date)}"),
+        ("Release gate", gate),
+        (
+            "Built by",
+            (
+                '<a class="mono" href="/commands/build_site/">build_site(1)</a> from the '
+                "tracked documents and each tool's own argument parser. Nothing here is "
+                "hand-copied."
+            ),
+        ),
+        (
+            "Typeset in",
+            (
+                "Chivo and Inconsolata, under the SIL Open Font License "
+                '(<a href="/fonts/Chivo-OFL.txt">Chivo</a>, '
+                '<a href="/fonts/Inconsolata-OFL.txt">Inconsolata</a>).'
+            ),
+        ),
+        ("License", 'MIT. The full text is <a href="/license/">Appendix B</a>.'),
+    )
+    entries = "".join(f"<dt>{key}</dt><dd>{value}</dd>" for key, value in rows)
+    return (
+        '<section class="colophon" aria-labelledby="colophon-h">'
+        f'<h2 id="colophon-h" class="label">Colophon</h2><dl>{entries}</dl>'
+        '<p class="endmark" aria-hidden="true">■</p></section>'
+    )
 
 
 def render_chapter(
@@ -804,6 +902,7 @@ def render_chapter(
         center=f"{kind} {chapter.number} · {title}",
         order=f"{chapter.order} · Rev {site.version}",
         body=body,
+        tab=chapter.number,
         previous=previous,
         following=following,
     )
@@ -812,16 +911,175 @@ def render_chapter(
 
 def render_404(site: Site) -> str:
     body = (
-        '<article class="chapter"><p class="kicker">Not found</p><h1>No such page</h1>'
-        "<p>There is no page at this address in the sysops_pub reference manual.</p>"
-        '<p><a href="/">Return to the contents</a></p></article>'
+        '<article class="chapter missing"><p class="kicker">ENOENT · exit status 2</p>'
+        "<h1>No manual entry</h1>"
+        '<div class="panel"><pre><code>$ man <span class="missing-path">this-page</span>\n'
+        'No manual entry for <span class="missing-path">this-page</span></code></pre></div>'
+        "<p>There is no page at this address in the sysops_pub reference manual. The contents "
+        'are on the <a href="/">front page</a>, and every tool has a page under '
+        '<a href="/commands/">Commands</a>.</p></article>'
     )
     return _page(
         site,
-        title="Not found",
+        title="No manual entry",
         lede="There is no page at this address.",
         center="Not found",
-        order="SOP-404",
+        order="ENOENT",
+        body=body,
+    )
+
+
+# --------------------------------------------------------------------------------------------
+# Data-sheet identity: part number, package marking, and pin configuration
+
+
+def part_number(version: str) -> str:
+    major, minor, patch = (int(part) for part in version.split("."))
+    return f"SOP-{major}{minor}{patch:02d}"
+
+
+def date_code(date: str) -> str:
+    """YYWW, the ISO year and week, as semiconductor date codes are printed."""
+    year, week, _ = datetime.date.fromisoformat(date).isocalendar()
+    return f"{year % 100:02d}{week:02d}"
+
+
+def render_marking(site: Site) -> str:
+    sha = site.commit.sha
+    cells = []
+    for row, bits in enumerate(bit_rows(sha)):
+        for column, bit in enumerate(bits):
+            x, y = 70 + column * 10, 150 + row * 10
+            css = "bit on" if bit == "1" else "bit"
+            cells.append(f'<rect x="{x}" y="{y}" width="8" height="8" class="{css}"/>')
+    pins = "".join(
+        f'<rect x="{62 + index * 31}" y="6" width="14" height="14" class="pin"/>'
+        f'<rect x="{62 + index * 31}" y="230" width="14" height="14" class="pin"/>'
+        for index in range(14)
+    )
+    code = date_code(site.commit.date)
+    svg = (
+        '<svg class="marking" viewBox="0 0 540 250" role="img" aria-labelledby="mark-t mark-d" '
+        'xmlns="http://www.w3.org/2000/svg"><title id="mark-t">Package marking</title>'
+        f'<desc id="mark-d">Top of the package: part number {part_number(site.version)}, date '
+        f"code {code}, lot {site.commit.short}, and the full commit {sha} as a field of 160 bits."
+        f"</desc>{pins}"
+        '<rect x="40" y="20" width="460" height="210" rx="6" class="body"/>'
+        '<circle cx="62" cy="42" r="6" class="dot"/>'
+        '<text x="70" y="70" class="mk mk-name">SYSOPS_PUB</text>'
+        f'<text x="70" y="100" class="mk mk-part">{part_number(site.version)}</text>'
+        f'<text x="70" y="126" class="mk mk-code">{code}  {site.commit.short.upper()}</text>'
+        f'{"".join(cells)}</svg>'
+    )
+    legend = (
+        '<div class="table"><table class="legend"><thead><tr><th scope="col">Marking</th>'
+        '<th scope="col">Meaning</th></tr></thead><tbody>'
+        f"<tr><td class='mono'>{part_number(site.version)}</td><td>Part number: sysops_pub "
+        f"{site.version}.</td></tr>"
+        f"<tr><td class='mono'>{code}</td><td>Date code YYWW: ISO week of the commit date, "
+        f"{site.commit.date}.</td></tr>"
+        f"<tr><td class='mono'>{site.commit.short.upper()}</td><td>Lot: the commit this page "
+        "was built from.</td></tr>"
+        "<tr><td>Bit field</td><td>The full 160-bit commit, one column per hex digit, most "
+        f"significant bit on top: <code>{sha}</code>.</td></tr></tbody></table></div>"
+    )
+    return (
+        '<div class="ds-marking"><h2 class="label">Package marking</h2>'
+        f'<div class="part">{svg}</div>{legend}</div>'
+    )
+
+
+def pin_map() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """Pins 1–16 down the left, 17–32 up the right; the last pin on each side is power."""
+    left = [("OVW", "/")]
+    left += [(chapter.pin, chapter.href) for chapter in ALL_PAGES]
+    left += [("CMDS", "/commands/"), ("ERRATA", "/errata/")]
+    left += [("NC", "")] * (15 - len(left)) + [("GND", "")]
+    right = [(name, f"/commands/{name}/") for name in COMMANDS]
+    right += [("NC", "")] * (15 - len(right)) + [("VCC", "")]
+    if len(left) != 16 or len(right) != 16:
+        raise BuildError("the pinout needs 16 pins a side; add or remove a pin")
+    return left, right
+
+
+def render_pinout(site: Site) -> str:
+    left, right = pin_map()
+    pitch, top = 28, 40
+    parts = []
+    for index, (label, href) in enumerate(left):
+        y = top + index * pitch
+        parts.append(f'<path d="M178 {y} H200" class="lead"/>')
+        parts.append(f'<text x="208" y="{y + 4}" class="pn">{index + 1}</text>')
+        parts.append(_pin_label(label, href, 170, y + 5, "end"))
+    for index, (label, href) in enumerate(right):
+        y = top + (15 - index) * pitch
+        parts.append(f'<path d="M320 {y} H342" class="lead"/>')
+        parts.append(f'<text x="312" y="{y + 4}" text-anchor="end" class="pn">{index + 17}</text>')
+        parts.append(_pin_label(label, href, 350, y + 5, "start"))
+    height = top + 15 * pitch + 32
+    return (
+        '<div class="ds-pinout"><h2 class="label">Pin configuration</h2><div class="part pins">'
+        f'<svg class="pinout" viewBox="0 0 520 {height}" role="img" aria-labelledby="pin-t pin-d" '
+        'xmlns="http://www.w3.org/2000/svg"><title id="pin-t">Pin configuration</title>'
+        '<desc id="pin-d">The manual drawn as a 32-pin dual in-line package. Pins 1 to 16 down '
+        "the left are the overview, chapters, appendices, commands index and errata; pins 17 "
+        "to 32 up the right are the commands. Each labelled pin links to its page.</desc>"
+        f'<rect x="200" y="{top - 22}" width="120" height="{15 * pitch + 44}" rx="4" class="body"/>'
+        f'<path d="M245 {top - 22} A15 15 0 0 0 275 {top - 22}" class="notch"/>'
+        f'<text transform="translate(260 {top + 7.5 * pitch}) rotate(-90)" text-anchor="middle" '
+        f'class="chipname">{part_number(site.version)} · SYSOPS_PUB</text>'
+        f'{"".join(parts)}</svg></div><p class="note">Top view. NC: no connection.</p></div>'
+    )
+
+
+def _pin_label(label: str, href: str, x: int, y: int, anchor: str) -> str:
+    css = "pl mono" if href.startswith("/commands/") and href != "/commands/" else "pl"
+    text = f'<text x="{x}" y="{y}" text-anchor="{anchor}" class="{css}">{html.escape(label)}</text>'
+    return f'<a href="{href}">{text}</a>' if href else text.replace('class="pl', 'class="pl dim')
+
+
+def errata(pages: list[ManPage]) -> list[tuple[str, str]]:
+    """Every option, argument, or command a tool ships without help text, found in its parser."""
+    found: list[tuple[str, str]] = []
+    for page in pages:
+        for flag, text in page.arguments + page.options:
+            if not text:
+                found.append((page.name, flag))
+        for command, text, _ in page.commands:
+            if not text:
+                found.append((page.name, command))
+    return found
+
+
+def render_errata(site: Site, pages: list[ManPage]) -> str:
+    items = errata(pages)
+    if items:
+        rows = "".join(
+            f'<tr><td><a class="mono" href="/commands/{name}/">{name}(1)</a></td>'
+            f"<td><code>{html.escape(entry)}</code></td><td>Ships without help text, so its "
+            "manual entry is blank.</td></tr>"
+            for name, entry in items
+        )
+        listing_html = (
+            f"<p>{len(items)} known defects against revision {site.version}. Each is found by "
+            "reading the tool's own argument parser, so this sheet empties itself when the help "
+            "text is written.</p>"
+            '<div class="table"><table><thead><tr><th scope="col">Page</th>'
+            '<th scope="col">Entry</th><th scope="col">Defect</th></tr></thead>'
+            f"<tbody>{rows}</tbody></table></div>"
+        )
+    else:
+        listing_html = f"<p>No known errata against revision {site.version}.</p>"
+    body = (
+        '<article class="chapter"><p class="kicker">Errata</p><h1>Errata</h1>'
+        f"{listing_html}</article>"
+    )
+    return _page(
+        site,
+        title="Errata",
+        lede="Known defects against this revision of the manual.",
+        center="Errata",
+        order=f"{part_number(site.version)} errata",
         body=body,
     )
 
@@ -913,6 +1171,7 @@ def build(output: Path, *, release: bool, draft: bool) -> Path:
         paths=tracked_paths(),
         gate=gate,
         template=Template((SITE_SOURCE / "page.html").read_text(encoding="utf-8")),
+        titles={chapter.number: _plain(_title_of(chapter)) for chapter in ALL_PAGES},
     )
 
     pages = [man_page(name) for name in COMMANDS]
@@ -962,11 +1221,13 @@ def build(output: Path, *, release: bool, draft: bool) -> Path:
                     center="Commands",
                     order=f"{page.name.upper()}(1)",
                     body=body,
+                    tab="Cmd",
                     previous=previous,
                     following=following,
                 ),
             )
         _write(staging, "404.html", render_404(site))
+        _write(staging, "errata/index.html", render_errata(site, pages))
         for name in STATIC_FILES:
             shutil.copy2(SITE_SOURCE / name, staging / name)
         for name in STATIC_DIRECTORIES:
@@ -1018,6 +1279,7 @@ def render_command_index(site: Site, pages: list[ManPage], sequence) -> str:
         center="Commands",
         order="Section 1",
         body=body,
+        tab="Cmd",
         previous=sequence[-1],
         following=(f"{pages[0].name}(1)", f"/commands/{pages[0].name}/"),
     )

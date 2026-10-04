@@ -1,4 +1,5 @@
 <!doctype html>
+$colophon
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -6,11 +7,13 @@
   <title>$page_title</title>
   <meta name="description" content="$description">
   <meta name="color-scheme" content="light dark">
+  <meta name="sysops-pub-build" content="$build">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/fonts/chivo.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/inconsolata.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/styles.css">
   <script src="/theme.js"></script>
+  <script src="/eggs.js" defer></script>
 </head>
 <body class="$body_class">
   <a class="skip" href="#main">Skip to content</a>
@@ -24,6 +27,7 @@
       </span>
     </header>
     <div class="rule" aria-hidden="true"></div>
+    $tabs
     $draft
     <main id="main">
       $body
@@ -31,8 +35,26 @@
     <nav class="pager" aria-label="Previous and next">$prev $next</nav>
     <footer class="runf">
       <span>sysops_pub $version · $date · commit $commit</span>
+      <span class="hint" hidden>Press <kbd>?</kbd> for the keyboard reference.</span>
       <span>MIT licensed · synthetic data only · <a href="$repository_url">github.com/sparklbarff/sysops_pub</a></span>
     </footer>
   </div>
+  <dialog class="keys" aria-labelledby="keys-h">
+    <h2 id="keys-h" class="label">Keyboard reference</h2>
+    <dl>
+      <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>scroll down, up</dd>
+      <dt><kbd>g</kbd><kbd>g</kbd> <kbd>G</kbd></dt><dd>top, bottom of the page</dd>
+      <dt><kbd>n</kbd> <kbd>p</kbd></dt><dd>next, previous page</dd>
+      <dt><kbd>0</kbd>–<kbd>8</kbd></dt><dd>overview, chapters 1 to 8</dd>
+      <dt><kbd>a</kbd> <kbd>b</kbd></dt><dd>appendix A, B</dd>
+      <dt><kbd>c</kbd></dt><dd>commands</dd>
+      <dt><kbd>e</kbd></dt><dd>errata</dd>
+      <dt><kbd>t</kbd></dt><dd>light or dark</dd>
+      <dt><kbd>?</kbd> <kbd>Esc</kbd></dt><dd>this reference, close</dd>
+    </dl>
+    <p class="note">Undocumented features are documented here.</p>
+    <button class="close" type="button">Close</button>
+  </dialog>
+  <p class="toast" role="status" hidden></p>
 </body>
 </html>

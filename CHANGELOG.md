@@ -14,6 +14,11 @@
   The Chivo and Inconsolata subsets ship under the SIL Open Font License and are hash-bound in the
   disclosure allowlist. The Spectre and Eidolon case studies stay in the repository and are not
   published on the site.
+- Navigation is a thumb index of chapter tabs on the page edge. The front page adds a data-sheet
+  pin configuration (the manual as a 32-pin package, each pin a link), a package marking that
+  prints the part number, date code, and the full commit as a 160-bit field, and a colophon. An
+  Errata sheet is generated from every tool option that ships without help text, and an optional
+  `site/eggs.js` adds a keyboard reference behind `?`.
 
 ## 0.7.0 - 2026-10-02
 
