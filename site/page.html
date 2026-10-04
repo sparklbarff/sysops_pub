@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>$page_title</title>
+  <meta name="description" content="$description">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/chivo.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/inconsolata.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/theme.js"></script>
+</head>
+<body class="$body_class">
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="page">
+    <header class="run">
+      <a class="run-home" href="/">sysops_pub reference manual</a>
+      <span class="run-center">$center</span>
+      <span class="run-right">
+        <span>$order</span>
+        <button class="theme" type="button" hidden>Dark</button>
+      </span>
+    </header>
+    <div class="rule" aria-hidden="true"></div>
+    $draft
+    <main id="main">
+      $body
+    </main>
+    <nav class="pager" aria-label="Previous and next">$prev $next</nav>
+    <footer class="runf">
+      <span>sysops_pub $version · $date · commit $commit</span>
+      <span>MIT licensed · synthetic data only · <a href="$repository_url">github.com/sparklbarff/sysops_pub</a></span>
+    </footer>
+  </div>
+</body>
+</html>

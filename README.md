@@ -85,6 +85,8 @@ walks through adding a component, adopting the agent policy, and adopting retrie
   `docs/SECURITY_BOUNDARY.md`: the design, the exact private-to-reference coverage, and the rules for
   what may cross from the private system.
 - `docs/case-studies/`: two sanitized governance incidents, named Spectre and Eidolon.
+- `tools/build_site.py`, `site/`: the reference-manual website, generated from these documents and
+  from each tool's own argument parser; the build writes to the ignored `_site/`.
 
 ## Safety model
 

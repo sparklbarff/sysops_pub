@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.0 - 2026-10-03
+
+- Add `tools/build_site.py` and `site/`: a static reference-manual website generated from the
+  tracked documents with no third-party packages. Each document is a numbered chapter, the
+  changelog and license are appendices, and every tool gets a manual page generated from its own
+  argument parser and docstring, so the site cannot drift from the code. The two ASCII diagrams are
+  redrawn as block diagrams bound to their exact source text; a changed diagram fails the build.
+- The build is reproducible from a commit and writes to the ignored `_site/`. `--draft` allows
+  uncommitted changes and marks every page; `--release` runs the release gate first and needs a
+  pushed HEAD. The front page's absolute maximum ratings print only when that gate passed.
+- Light and dark modes follow the system setting, with a header switch as the site's only script.
+  The Chivo and Inconsolata subsets ship under the SIL Open Font License and are hash-bound in the
+  disclosure allowlist. The Spectre and Eidolon case studies stay in the repository and are not
+  published on the site.
+
 ## 0.7.0 - 2026-10-02
 
 - Add `adopt.py --into <project>`: a project-local installer alongside the existing `--target`
