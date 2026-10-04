@@ -126,6 +126,7 @@ a:hover {
 
 .page {
   max-width: 1296px;
+  min-width: 0;
   margin: 0 auto;
   padding: clamp(20px, 3vw, 44px) clamp(18px, 5vw, 72px) 40px;
 }
@@ -325,6 +326,7 @@ a.src code {
   margin: 0;
   padding: 18px 22px;
   overflow-x: auto;
+  scrollbar-color: var(--panel-mute) var(--panel);
   font-size: 1rem;
   line-height: 1.65;
 }
@@ -720,7 +722,7 @@ td {
 .chapter > .table,
 .chapter > .fig,
 .chapter > .panel {
-  max-width: var(--wide);
+  max-width: min(100%, var(--wide));
 }
 
 .chapter > .panel {
@@ -822,6 +824,11 @@ h3 {
   margin: 0;
   overflow-x: auto;
   white-space: pre;
+  scrollbar-color: var(--panel-mute) var(--panel);
+}
+
+.mansec pre.narrow {
+  display: none;
 }
 
 .mansec b {
@@ -1074,6 +1081,10 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.pintable {
+  display: none;
+}
+
 .pinout .body {
   fill: var(--paper);
   stroke: var(--ink);
@@ -1215,6 +1226,12 @@ kbd {
   min-width: min(100%, 40ch);
 }
 
+@media (min-width: 1001px) {
+  .page {
+    padding-right: max(clamp(18px, 5vw, 72px), 72px);
+  }
+}
+
 /* The thumb index folds into a row of tabs hanging from the header rule. */
 @media (max-width: 1000px) {
   .thumbs {
@@ -1265,12 +1282,157 @@ kbd {
 }
 
 @media (max-width: 620px) {
-  .pins {
-    overflow-x: auto;
+  /* Long command lines wrap instead of pushing the page sideways; copying is unaffected. */
+  .panel pre,
+  .mansec pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 
-  .pinout {
-    min-width: 440px;
+  .mansec pre.wide {
+    display: none;
+  }
+
+  .mansec pre.narrow {
+    display: block;
+    white-space: pre;
+    overflow-wrap: normal;
+  }
+
+  .manpage {
+    font-size: 0.9375rem;
+  }
+
+  .manrun span:last-child {
+    display: none;
+  }
+
+  /* All twelve tabs stay visible: the strip wraps instead of scrolling off the edge. */
+  .thumbs {
+    overflow: visible;
+  }
+
+  .thumbs ol {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .tab {
+    min-width: 34px;
+    padding: 0 8px;
+  }
+
+  /* The pin drawing is too fine at phone width; the pin description table takes its place. */
+  .pins,
+  .ds-pinout > .note {
+    display: none;
+  }
+
+  .pintable {
+    display: block;
+  }
+
+  .table.pintable tbody {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .table.pintable tr {
+    display: flex;
+    margin: 0;
+    border: 1px solid var(--ink);
+  }
+
+  .table.pintable td,
+  .table.pintable td:first-child {
+    width: auto;
+    border: 0;
+    padding: 6px 8px;
+  }
+
+  .table.pintable td:first-child {
+    flex: none;
+    min-width: 2.6em;
+    text-align: center;
+  }
+
+  .table.pintable td:last-child {
+    font-family: var(--mono);
+    overflow-wrap: anywhere;
+  }
+
+  .table.pintable td[data-label]::before {
+    display: none;
+  }
+
+  /* Data-sheet tables stack: each row becomes a card headed by its first cell. */
+  .table {
+    overflow: visible;
+  }
+
+  .table table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .table tr {
+    margin-bottom: 12px;
+    border: 2px solid var(--ink);
+  }
+
+  .table td {
+    padding: 8px 12px;
+    border: 0;
+    border-top: 1px solid var(--hair);
+  }
+
+  .table td:first-child {
+    border-top: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-weight: 800;
+  }
+
+  .table td:first-child a,
+  .table td:first-child code {
+    color: var(--paper);
+  }
+
+  .table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--mute);
+  }
+
+  .table td:first-child::before {
+    color: var(--paper);
+    opacity: 0.7;
+  }
+
+  .ratings td.max {
+    width: 100%;
+    text-align: left;
+  }
+
+  .legend td:first-child {
+    width: 100%;
   }
 
   .hint {

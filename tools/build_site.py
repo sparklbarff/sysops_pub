@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,6 +37,7 @@ OUTPUT_MARKER = "deploy.json"
 STATIC_FILES = ("styles.css", "theme.js", "eggs.js", "favicon.svg", "vercel.json", "robots.txt")
 STATIC_DIRECTORIES = ("fonts",)
 MAN_WIDTH = 76
+NARROW_WIDTH = 32
 
 
 class BuildError(Exception):
@@ -498,6 +500,7 @@ class ManPage:
     name: str
     summary: str
     synopsis: str
+    synopsis_narrow: str
     description: list[str]
     options: list[tuple[str, str]]
     arguments: list[tuple[str, str]]
@@ -556,6 +559,20 @@ def _describe(parser: argparse.ArgumentParser) -> tuple[list, list, list]:
     return options, arguments, commands
 
 
+def _usage(parser: argparse.ArgumentParser, width: int) -> str:
+    """argparse's own usage line, wrapped at a fixed width so the build is reproducible."""
+    previous = os.environ.get("COLUMNS")
+    os.environ["COLUMNS"] = str(width)
+    try:
+        usage = parser.format_usage()
+    finally:
+        if previous is None:
+            os.environ.pop("COLUMNS", None)
+        else:
+            os.environ["COLUMNS"] = previous
+    return re.sub(r"\n {7}", "\n", re.sub(r"^usage: ", "", usage.rstrip()))
+
+
 def man_page(name: str) -> ManPage:
     docstring, parser = _load_tool(name)
     paragraphs = [
@@ -567,21 +584,15 @@ def man_page(name: str) -> ManPage:
     if len(paragraphs) > 1 and paragraphs[0].rstrip(".") == summary:
         paragraphs = paragraphs[1:]
     if parser is None:
-        return ManPage(name, summary, PARSERLESS[name], paragraphs, [], [], [])
+        narrow = textwrap.fill(PARSERLESS[name], NARROW_WIDTH, subsequent_indent="  ")
+        return ManPage(name, summary, PARSERLESS[name], narrow, paragraphs, [], [], [])
     parser.prog = f"python3 tools/{name}.py"
-    previous = os.environ.get("COLUMNS")
-    os.environ["COLUMNS"] = str(MAN_WIDTH)
-    try:
-        usage = parser.format_usage()
-    finally:
-        if previous is None:
-            os.environ.pop("COLUMNS", None)
-        else:
-            os.environ["COLUMNS"] = previous
-    synopsis = re.sub(r"^usage: ", "", usage.rstrip())
-    synopsis = re.sub(r"\n {7}", "\n", synopsis)
+    synopsis = _usage(parser, MAN_WIDTH)
+    synopsis_narrow = _usage(parser, NARROW_WIDTH)
     options, arguments, commands = _describe(parser)
-    return ManPage(name, summary, synopsis, paragraphs, options, arguments, commands)
+    return ManPage(
+        name, summary, synopsis, synopsis_narrow, paragraphs, options, arguments, commands
+    )
 
 
 def render_man(page: ManPage, examples: list[str], see_also: list[tuple[str, str]]) -> str:
@@ -593,7 +604,13 @@ def render_man(page: ManPage, examples: list[str], see_also: list[tuple[str, str
 
     blocks = [
         ("NAME", f"<p><b>{page.name}</b> — {html.escape(page.summary)}</p>"),
-        ("SYNOPSIS", f"<pre>{html.escape(page.synopsis)}</pre>"),
+        (
+            "SYNOPSIS",
+            (
+                f'<pre class="wide">{html.escape(page.synopsis)}</pre>'
+                f'<pre class="narrow">{html.escape(page.synopsis_narrow)}</pre>'
+            ),
+        ),
         ("DESCRIPTION", "".join(f"<p>{html.escape(text)}</p>" for text in page.description)),
     ]
     if page.arguments:
@@ -723,13 +740,44 @@ def _page(
         tabs=render_tabs(tab, site.titles),
         version=html.escape(site.version),
         date=site.commit.date,
-        body=body,
+        body=label_cells(body),
         prev=nav(previous, "prev"),
         next=nav(following, "next"),
         commit=site.commit.short,
         draft="" if site.commit.clean else '<p class="draft">Draft · uncommitted changes</p>',
         repository_url=REPOSITORY_URL,
     )
+
+
+TABLE = re.compile(r"<table[^>]*>.*?</table>", re.DOTALL)
+
+
+def label_cells(fragment: str) -> str:
+    """Give every data cell its column header as data-label, for the stacked phone layout."""
+
+    def label(table: re.Match[str]) -> str:
+        text = table.group(0)
+        headers = [
+            html.escape(_plain(cell), quote=True)
+            for cell in re.findall(r"<th[^>]*>(.*?)</th>", text, re.DOTALL)
+        ]
+
+        def row(match: re.Match[str]) -> str:
+            cells = iter(headers)
+            return re.sub(
+                r"<td(?=[\s>])",
+                lambda _: f'<td data-label="{next(cells, "")}"',
+                match.group(0),
+            )
+
+        return re.sub(
+            r"<tbody>.*?</tbody>",
+            lambda body: re.sub(r"<tr>.*?</tr>", row, body.group(0), flags=re.DOTALL),
+            text,
+            flags=re.DOTALL,
+        )
+
+    return TABLE.sub(label, fragment)
 
 
 def _neighbours(index: int, items: Sequence[tuple[str, str]]):
@@ -1028,7 +1076,21 @@ def render_pinout(site: Site) -> str:
         f'<path d="M245 {top - 22} A15 15 0 0 0 275 {top - 22}" class="notch"/>'
         f'<text transform="translate(260 {top + 7.5 * pitch}) rotate(-90)" text-anchor="middle" '
         f'class="chipname">{part_number(site.version)} · SYSOPS_PUB</text>'
-        f'{"".join(parts)}</svg></div><p class="note">Top view. NC: no connection.</p></div>'
+        f'{"".join(parts)}</svg></div><p class="note">Top view. NC: no connection.</p>'
+        + render_pin_table(left, right)
+        + "</div>"
+    )
+
+
+def render_pin_table(left: list[tuple[str, str]], right: list[tuple[str, str]]) -> str:
+    """Pin descriptions, as a data sheet lists them; shown in place of the drawing on phones."""
+    rows = []
+    for number, (label, href) in enumerate(left + right, start=1):
+        name = f'<a href="{href}">{html.escape(label)}</a>' if href else html.escape(label)
+        rows.append(f"<tr><td>{number}</td><td>{name}</td></tr>")
+    return (
+        '<div class="table pintable"><table><thead><tr><th scope="col">Pin</th>'
+        f'<th scope="col">Name</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
     )
 
 
