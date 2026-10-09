@@ -128,8 +128,14 @@ Run a command in the foreground with an explicit timeout and a sanitized receipt
 python3 tools/managed_job.py --receipt ../managed-job.json --timeout 60 -- python3 tools/test.py
 ```
 
-The receipt omits raw command arguments. On timeout or interruption the runner cleans up only the
-process it started and, on POSIX systems, that owned process group.
+The receipt omits raw command arguments. On POSIX the runner cleans up only its owned group and
+checks terminal ownership even when the leading process reports success. Leftover children produce
+exit 125, not success. Windows does not yet have descendant ownership through Job Objects.
+The updater and runner use version-2 receipts; the updater's observed state comes from fresh disk
+readback, not the dictionary its apply step changed.
+
+See `docs/OPERATIONS.md` before adapting these examples to a shared service, concurrent validation,
+or a repository whose evidence spans coding-agent runtimes.
 
 ## Platform notes
 

@@ -12,7 +12,9 @@ For Codex:
 - Use repository validators and Git hooks for acceptance evidence.
 - Treat lifecycle context hooks as advisory unless the runtime documents a durable block contract.
 
-`config.toml.example` contains only the sandbox and approval baseline. Current Codex configuration
+`config.toml.example` contains the sandbox and approval baseline, a quieter display preference, and
+explicit analytics opt-out. These do not lower model effort or impose an answer-verbosity limit.
+Current Codex configuration
 documents `workspace-write` and `on-request` as supported values. Copy individual reviewed keys
 into your own config rather than replacing a tool-managed configuration wholesale.
 
@@ -37,5 +39,10 @@ Some Codex surfaces advertise optional structured-input tools that are unavailab
 interaction mode. Treat that as a capability mismatch, not a reason to enable undocumented flags:
 ask one concise question in normal conversation only when the answer materially changes the work,
 then continue with stated assumptions when it does not.
+
+For shared-service deployments, keep native thread identity separate from the service's startup
+environment. Do not inject one-off configuration overrides merely to attach identity; some runtime
+versions select embedded mode for such overrides. Inspect the installed runtime before changing
+launch arguments, and never restart a shared service as an automatic drift repair.
 
 Official reference: https://learn.chatgpt.com/docs/config-file/config-reference

@@ -76,7 +76,8 @@ The synthetic update supervisor separates four concerns:
 1. Check every declared channel without writing.
 2. Require one explicitly named channel for apply.
 3. Defer a running application instead of force-quitting it.
-4. Write before, action, after, and independent-verification evidence to a receipt.
+4. Reopen the persisted state and compare it with the complete expected result, including unselected
+   channels, then receipt the expected and observed states separately.
 
 The example changes only a marked synthetic state directory. Real package-manager adapters are an
 adoption boundary because each platform needs its own discovery, rollback, privilege, and process
@@ -84,9 +85,14 @@ detection rules.
 
 The managed-job runner addresses process ownership separately. It starts one foreground child,
 waits through completion, and terminates only the process group it created on timeout or interrupt.
+On POSIX it also checks the group after the leading process exits: surviving children force cleanup
+and a nonzero ownership result. A leading process's success alone cannot certify terminal ownership.
 Its receipt records the executable name and argument count but not raw arguments, which may contain
 tokens or private paths. A runner cannot make an arbitrary command resource-safe, so worker limits
 remain part of the called tool's reviewed invocation contract.
+
+Budgeted concurrency, shared-daemon reconciliation and scheduled-job resource integration are
+documented adaptation boundaries in `docs/OPERATIONS.md`, not implemented host adapters here.
 
 ## Retrieval claims
 

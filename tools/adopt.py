@@ -130,7 +130,10 @@ SETTINGS_REL = Path(".claude/settings.json")
 
 
 def _safe_install_target(raw: str) -> Path:
-    target = Path(raw).expanduser().resolve()
+    unresolved = Path(raw).expanduser()
+    if unresolved.is_symlink():
+        raise AdoptionError(f"refusing symlink install target: {unresolved}")
+    target = unresolved.resolve()
     if target == Path(target.anchor) or target in {Path.home().resolve(), Path.cwd().resolve()}:
         raise AdoptionError(f"refusing unsafe install target: {target}")
     if _is_within(target, REPO_ROOT) or _is_within(REPO_ROOT, target):
@@ -138,6 +141,18 @@ def _safe_install_target(raw: str) -> Path:
     if not target.is_dir() or target.is_symlink():
         raise AdoptionError(f"install target must be an existing directory: {target}")
     return target
+
+
+def _project_destination(project: Path, relative: Path) -> Path:
+    destination = project / relative
+    current = destination
+    while current != project:
+        if current.is_symlink():
+            raise AdoptionError(f"refusing symlink in project destination: {current}")
+        current = current.parent
+    if not _is_within(destination.resolve(), project):
+        raise AdoptionError(f"destination escapes project: {destination}")
+    return destination
 
 
 def _install_targets(tool: str, platform: str) -> list[tuple[Path, Path]]:
@@ -212,7 +227,7 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
 
     actions: list[tuple[str, Path]] = []
     for source, rel in placements:
-        destination = project / rel
+        destination = _project_destination(project, rel)
         if destination.is_symlink():
             raise AdoptionError(f"refusing to touch a symlink: {destination}")
         if not destination.exists():
@@ -224,7 +239,8 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
 
     settings_action: str | None = None
     if settings_source is not None:
-        settings_dest = project / SETTINGS_REL
+        settings_dest = _project_destination(project, SETTINGS_REL)
+        _project_destination(project, SETTINGS_REL.with_name("settings.json.sysops-pub.bak"))
         if settings_dest.is_symlink():
             raise AdoptionError(f"refusing to touch a symlink: {settings_dest}")
         addition = json.loads(settings_source.read_text(encoding="utf-8"))
@@ -252,18 +268,20 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
         if action != "place":
             continue
         source = next(s for s, r in placements if r == rel)
-        destination = project / rel
+        destination = _project_destination(project, rel)
         destination.parent.mkdir(parents=True, exist_ok=True)
+        _project_destination(project, rel)
         shutil.copyfile(source, destination)
         print(f"PLACED {rel}")
     if settings_source is not None:
-        settings_dest = project / SETTINGS_REL
+        settings_dest = _project_destination(project, SETTINGS_REL)
         addition = json.loads(settings_source.read_text(encoding="utf-8"))
         if settings_dest.exists():
             existing = json.loads(settings_dest.read_text(encoding="utf-8"))
             merged, changed = _merge_settings(existing, addition)
             if changed:
                 backup = settings_dest.with_name(settings_dest.name + ".sysops-pub.bak")
+                _project_destination(project, backup.relative_to(project))
                 if not backup.exists():
                     shutil.copyfile(settings_dest, backup)
                 settings_dest.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
@@ -272,6 +290,7 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
                 print(f"UNCHANGED {SETTINGS_REL}")
         else:
             settings_dest.parent.mkdir(parents=True, exist_ok=True)
+            _project_destination(project, SETTINGS_REL)
             shutil.copyfile(settings_source, settings_dest)
             print(f"PLACED {SETTINGS_REL}")
     return 0

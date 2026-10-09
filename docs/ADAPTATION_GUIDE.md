@@ -1,5 +1,8 @@
 # Adaptation guide
 
+Project adoption rejects symlinked project roots and destination parents before writing any starter.
+It does not follow a project's `.claude` or `.agent-tools` link into another directory.
+
 Start by running the sandbox demo unchanged. Then adapt one component at a time.
 
 Use `tools/adopt.py --target` to create a reviewable starter bundle outside this repository. It
@@ -32,6 +35,9 @@ credential systems need dedicated adapters and stronger recovery plans.
 
 Keep global instructions short. Put project-specific identity and workflow rules in the project
 repository. Both Claude Code and Codex should defer to the nearest project instructions.
+Preserve an existing identity rather than imposing a planning/coding/research split. Choose those
+roles and any additional gates only when the project's actual work needs them. Search both runtime
+histories when the project has used both; a negative search of one store is incomplete.
 
 Use the same policy concepts across tools, but do not pretend their enforcement mechanisms are
 identical. Claude Code can run lifecycle hooks. Codex should use its native filesystem sandbox,

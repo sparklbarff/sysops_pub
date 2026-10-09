@@ -20,8 +20,11 @@ private capability or manage a collaborator's live workstation directly.
 | Local retrieval | Real local indexes, refresh fan-out, policy, receipts, and operational grounding | Synthetic corpus, repository-to-index fan-out, and deterministic retrieval-contract exercises | Sanitized reimplementation |
 | Retrieval outcome semantics | Separates missing context, generated refusal, and human answer usability; excludes evaluation reports from their own index | Records context count and size, generation state, not-found emission, policy digest, and exclusions without claiming a retrieval hit is an answer | Sanitized reimplementation |
 | Retrieval evaluation | A frozen, human-ratified cohort question set judged against retrieved context, measured before adopting any retriever or corpus change | A synthetic frozen set with curated-in-corpus, coverage-gap, and absent-control cohorts; verdicts judged against retrieved text and bound to the retriever id | Sanitized reimplementation |
-| Supervised updates | Checks Homebrew, npm, pipx, uv, and casks; requires scoped apply; defers running apps; verifies and receipts each run | Updates only marked synthetic state with check-only default, exact-channel apply, running-item deferral, and verified receipts | Portable control pattern, no package-manager adapter |
-| Process ownership | Owns managed background suites through terminal state and prevents abandoned unscoped work | Foreground runner waits for its child, cleans up only its owned process on timeout, and writes a sanitized receipt | Portable reimplementation with documented Windows limits |
+| Supervised updates | Checks Homebrew, npm, pipx, uv, and casks; requires scoped apply; defers running apps; verifies and receipts each run | Updates marked synthetic state with check-only default, exact-channel apply, running-item deferral, independent disk readback, and expected-versus-observed receipts | Portable control pattern, no package-manager adapter |
+| Shared runtime reconciliation | Passively compares client, selected package, loaded executable and native update policy; coordinated replacement must preserve live sessions | Ownership and restart-required notice pattern in `docs/OPERATIONS.md`; no service adapter | Design-only |
+| Validation admission | Separate bounded checks, budgeted ordinary validation, exclusive heavy work and isolated benchmarks, with current-memory evidence and measured receipts | Resource-contract and scheduled-job integration guidance in `docs/OPERATIONS.md`; no queue or memory sampler | Design-only |
+| Process ownership | Owns managed background suites through terminal state and prevents abandoned unscoped work | POSIX runner verifies its group is terminal even after leader exit, cleans up surviving children, fails unknown ownership, and writes a sanitized receipt | Portable reimplementation with documented Windows and escaped-session limits |
+| Cross-runtime continuity | Repository evidence can span runtime-specific session stores; claims require the owner's artifact-specific evidence | Both instruction starters require searching every used runtime store; no private transcript exporter | Sanitized policy |
 | Off-machine publication | Claude mechanically denies Artifact and shared rules prohibit unapproved upload paths | Claude examples deny Artifact and both tool policies prohibit unapproved publication | Sanitized adapter |
 | Browser automation | Firefox-only dedicated Playwright MCP registration with matching managed browser build | Generic explicit-browser and MCP-owned-install guidance using Firefox as the example | Sanitized adapter |
 | Agent status cockpit | Live lifecycle hooks publish a sanitized repository label and state to iTerm2 | Optional non-mutating iTerm2 user-variable publisher; lifecycle wiring remains local | macOS optional adapter |
@@ -44,6 +47,9 @@ private capability or manage a collaborator's live workstation directly.
   execution evidence.
 - **Deliberate omission** means adding the private capability would violate the teaching or disclosure
   boundary.
+
+Preserve an existing identity and choose additional roles or workflow gates explicitly. Installing
+policy is not proof that a live session follows it.
 
 `adopt.py --into <project>` installs project-local starters (agent instructions, a scope guard, and
 a merged `.claude/settings.json`) into an existing project directory you name, previewing by default

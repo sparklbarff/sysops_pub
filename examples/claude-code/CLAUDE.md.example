@@ -12,9 +12,15 @@ user explicitly authorizes a broader operation.
 - Keep mutations scoped and recoverable.
 - Never bypass repository hooks or validators.
 - Treat hook success as evidence only after proving the hook reached its intended input.
+- Treat project continuity as cross-runtime. Search every runtime store the project has used before
+  declaring an approval or predecessor record unavailable. Preserve artifact and approval-stage links.
+- Keep responsibility for every process group you start until it is verified terminal.
+- Report the outcome first, link detailed logs, and provide exact pasteable commands. Do not replace
+  a visible failure with a long transcript or a generic success summary.
 - Never publish content through an Artifact tool, gist, paste service, upload endpoint, or new Git
   remote unless the user explicitly authorizes that exact publication in the current conversation.
 - Keep text intended for copying in plain text or a fenced code block, never a blockquote.
+- Put pasteable commands in an unlabelled fence containing only the exact command, without a prompt.
 - Report real machine constraints, but do not comment on the user's working hours or suggest when
   they should stop.
 

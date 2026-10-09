@@ -223,16 +223,24 @@ def apply(
         actions.append({**entry, "action": action})
 
     _write_json_atomic(target / STATE_NAME, {"schema_version": 1, "channels": state})
-    verified_entries = plan(catalog, state, channel)
-    verification_passed = all(
-        entry["status"] in {"current", "deferred"} for entry in verified_entries
-    )
+    # Read the real subject again. Inspecting the dictionary we just changed only
+    # verifies our intention, not persistence or preservation of other channels.
+    verification_error = None
+    observed = None
+    try:
+        _target, observed_catalog, observed = _open_sandbox(target)
+        verification_passed = observed_catalog == catalog and observed == state
+    except (OSError, UpdateError) as exc:
+        verification_error = str(exc)
+        verification_passed = False
     receipt = {
         "actions": actions,
-        "after": state,
+        "after": observed,
         "before": before,
         "channel": channel,
-        "receipt_schema_version": 1,
+        "expected_after": state,
+        "receipt_schema_version": 2,
+        "verification_error": verification_error,
         "verification_passed": verification_passed,
     }
     receipts.mkdir(exist_ok=True)

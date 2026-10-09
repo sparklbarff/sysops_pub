@@ -12,9 +12,15 @@ work only inside the project root unless the user explicitly authorizes a broade
 - Keep mutations scoped and recoverable.
 - Never bypass repository hooks or validators.
 - Use the native sandbox and approval boundary rather than assuming lifecycle hooks can block.
+- Treat project continuity as cross-runtime. Search every runtime store the project has used before
+  declaring an approval or predecessor record unavailable. Preserve artifact and approval-stage links.
+- Keep responsibility for every process group you start until it is verified terminal.
+- Report the outcome first, link detailed logs, and provide exact pasteable commands. Do not replace
+  a visible failure with a long transcript or a generic success summary.
 - Never publish content through a cloud artifact, gist, paste service, upload endpoint, or new Git
   remote unless the user explicitly authorizes that exact publication in the current conversation.
 - Keep text intended for copying in plain text or a fenced code block, never a blockquote.
+- Put pasteable commands in an unlabelled fence containing only the exact command, without a prompt.
 - Report real machine constraints, but do not comment on the user's working hours or suggest when
   they should stop.
 - If a structured input tool is unavailable in the active mode, ask one concise conversational

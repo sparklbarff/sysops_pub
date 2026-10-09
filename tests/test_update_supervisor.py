@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -14,6 +15,47 @@ import update_supervisor
 
 
 class UpdateSupervisorTests(unittest.TestCase):
+    def test_verification_reads_disk_instead_of_the_mutation_dictionary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
+            target = Path(directory) / "sandbox"
+            update_supervisor.initialize(target, execute=True)
+            original = (target / update_supervisor.STATE_NAME).read_bytes()
+            writer = update_supervisor._write_json_atomic
+
+            def dropped_write(path: Path, value: object) -> None:
+                if path.name == update_supervisor.STATE_NAME:
+                    path.write_bytes(original)
+                else:
+                    writer(path, value)
+
+            with (
+                mock.patch.object(update_supervisor, "_write_json_atomic", dropped_write),
+                self.assertRaisesRegex(update_supervisor.UpdateError, "verification failed"),
+            ):
+                update_supervisor.apply(target, "cli-tools", execute=True)
+            receipts = list((target / update_supervisor.RECEIPTS_NAME).glob("*.json"))
+            self.assertEqual(len(receipts), 1)
+            self.assertFalse(json.loads(receipts[0].read_text())["verification_passed"])
+
+    def test_verification_rejects_changes_to_an_unselected_channel(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
+            target = Path(directory) / "sandbox"
+            update_supervisor.initialize(target, execute=True)
+            writer = update_supervisor._write_json_atomic
+
+            def collateral_write(path: Path, value: object) -> None:
+                writer(path, value)
+                if path.name == update_supervisor.STATE_NAME:
+                    state = json.loads(path.read_text())
+                    state["channels"]["desktop-apps"]["terminal"]["version"] = "unexpected"
+                    writer(path, state)
+
+            with (
+                mock.patch.object(update_supervisor, "_write_json_atomic", collateral_write),
+                self.assertRaisesRegex(update_supervisor.UpdateError, "verification failed"),
+            ):
+                update_supervisor.apply(target, "cli-tools", execute=True)
+
     def test_initialize_is_dry_run_by_default(self) -> None:
         with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
             target = Path(directory) / "sandbox"

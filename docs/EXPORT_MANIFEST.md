@@ -18,6 +18,8 @@ repository. Nothing crosses merely because it is tracked or technically reusable
 | Local RAG policy and receipts | `samples/rag/` | Reimplement | Demonstrate the contract over a synthetic corpus; make Ollama optional |
 | Supervised update controller | `tools/update_supervisor.py`, `samples/updates/` | Reimplement | Preserve check, scope, deferral, receipt, and verify semantics without package managers or host inventory |
 | Managed heavy-job wrapper | `tools/managed_job.py` | Reimplement | Preserve process ownership and sanitized receipt semantics without private commands or metrics |
+| Runtime reconciliation and validation admission | `docs/OPERATIONS.md` | Rewrite | Preserve ownership, budget and independent-evidence distinctions without exporting host services or queue state |
+| Cross-runtime continuity | Both project instruction examples | Rewrite | Require complete runtime search and artifact-specific approval without exporting transcripts |
 | iTerm2 agent cockpit | `examples/macos/iterm_agent_status.py` | Reimplement | Publish only sanitized label and state; omit hooks, paths, transcripts, and session data |
 | macOS configuration lifecycle | `docs/MACOS_OPTIONAL.md` | Rewrite | Show the pattern, not the owner's Dock, packages, defaults, or LaunchAgents |
 | Spectre governance incidents | `docs/case-studies/SPECTRE.md` | Rewrite | Named case study, no private project implementation |

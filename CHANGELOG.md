@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.9.0 - 2026-10-09
+
+- Project adoption rejects symlinked roots, destination parents and settings-backup paths before
+  placing any starter. Synthetic fixtures preserve both the named project and the outside directory.
+
+- Repair the synthetic updater's verification: reopen persisted state, compare it with the complete
+  expected result, and reject dropped writes or collateral changes outside the selected channel.
+  Version-2 receipts distinguish observed and expected state and retain failed verification.
+- Repair POSIX managed-job ownership after the leading process exits. Surviving children are cleaned
+  up and produce exit 125. Timeout cleanup handles a child that ignores termination without touching
+  an unrelated process. Reject nonfinite timeouts and record terminal group evidence in version-2
+  receipts. Windows remains leading-process-only; escaped sessions are not confined.
+- Add operations guidance for passive shared-runtime reconciliation, resource-budgeted validation,
+  scheduled-job accounting, cross-runtime continuity, explicit role choices and scoped recovery.
+  The local manual includes it as chapter 9. These host adapters are design-only, not new queue
+  or daemon implementations.
+- Update both instruction starters for cross-runtime evidence, owned-process cleanup and concise
+  outcome-first output. Codex's example hides reasoning events and opts out of analytics without
+  changing model effort or answer verbosity.
+
 ## 0.8.0 - 2026-10-03
 
 - Add `tools/build_site.py` and `site/`: a static reference-manual website generated from the

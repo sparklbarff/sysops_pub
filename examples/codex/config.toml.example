@@ -1,2 +1,6 @@
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
+hide_agent_reasoning = true
+
+[analytics]
+enabled = false

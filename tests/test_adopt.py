@@ -156,6 +156,40 @@ class AdoptionTests(unittest.TestCase):
             self.assertEqual(existing.read_text(encoding="utf-8"), "my own instructions\n")
             self.assertIn("PRESENT-DIFFERS-SKIP", stdout)
 
+    def test_into_rejects_symlinked_destination_parents_before_any_write(self) -> None:
+        for parent in (".claude", ".agent-tools"):
+            for execute in (False, True):
+                with (
+                    self.subTest(parent=parent, execute=execute),
+                    tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory,
+                ):
+                    root = Path(directory)
+                    project = root / "project"
+                    outside = root / "outside"
+                    project.mkdir()
+                    outside.mkdir()
+                    (project / parent).symlink_to(outside, target_is_directory=True)
+                    arguments = ["--into", str(project), "--tool", "claude-code"]
+                    if execute:
+                        arguments.append("--execute")
+                    result, _stdout, stderr = self.run_adopt(*arguments)
+                    self.assertEqual(result, 2, stderr)
+                    self.assertIn("symlink", stderr)
+                    self.assertEqual(list(outside.iterdir()), [])
+                    self.assertFalse((project / "CLAUDE.md").exists())
+
+    def test_into_rejects_a_symlinked_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
+            root = Path(directory)
+            actual = root / "actual"
+            actual.mkdir()
+            alias = root / "alias"
+            alias.symlink_to(actual, target_is_directory=True)
+            result, _stdout, stderr = self.run_adopt("--into", str(alias), "--execute")
+            self.assertEqual(result, 2, stderr)
+            self.assertIn("symlink", stderr)
+            self.assertEqual(list(actual.iterdir()), [])
+
     def test_into_merges_settings_preserving_user_keys_and_backs_up(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
             project = Path(directory) / "proj"

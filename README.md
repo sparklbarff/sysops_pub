@@ -18,6 +18,8 @@ shape of the system and the discipline behind it.
   does not accumulate hidden authority.
 - Supervised handling of long-running and machine-changing work: check without writing, require an
   explicit scope to act, defer a running application, and receipt every step.
+- Independent update readback and terminal process-group ownership, including negative tests for
+  dropped writes, collateral changes, and children that outlive their leading process.
 - Retrieval that reports whether context was found and never claims that retrieving text is the same
   as answering a question.
 
@@ -84,6 +86,8 @@ walks through adding a component, adopting the agent policy, and adopting retrie
 - `docs/ARCHITECTURE.md`, `docs/CAPABILITY_MATRIX.md`, `docs/EXPORT_MANIFEST.md`,
   `docs/SECURITY_BOUNDARY.md`: the design, the exact private-to-reference coverage, and the rules for
   what may cross from the private system.
+- `docs/OPERATIONS.md`: shared-runtime coordination, budgeted validation, cross-runtime continuity,
+  preservation-first adoption, and recovery boundaries, with unimplemented adapters named explicitly.
 - `docs/case-studies/`: two sanitized governance incidents, named Spectre and Eidolon.
 - `tools/build_site.py`, `site/`: the reference-manual website, generated from these documents and
   from each tool's own argument parser; the build writes to the ignored `_site/`.

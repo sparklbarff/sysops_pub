@@ -71,6 +71,7 @@ CHAPTERS = (
     Chapter("6", "SOP-210", "docs/EXPORT_MANIFEST.md", "export-manifest", "EXPORT"),
     Chapter("7", "SOP-220", "docs/PARITY.md", "parity", "PARITY"),
     Chapter("8", "SOP-300", "docs/MACOS_OPTIONAL.md", "macos", "MACOS"),
+    Chapter("9", "SOP-310", "docs/OPERATIONS.md", "operations", "OPS"),
 )
 APPENDICES = (
     Chapter("A", "SOP-900", "CHANGELOG.md", "revisions", "REVS"),
