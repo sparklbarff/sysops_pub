@@ -17,10 +17,15 @@ DEFAULT_STATE = REPO_ROOT / "samples" / "updates" / "state-template.json"
 MARKER_NAME = ".sysops-pub-update-sandbox"
 STATE_NAME = "state.json"
 RECEIPTS_NAME = "receipts"
+UNRESOLVED_NAME = "unresolved.json"
 
 
 class UpdateError(RuntimeError):
     """The update request or sandbox state is unsafe or malformed."""
+
+
+class UnresolvedError(UpdateError):
+    """An earlier failed update is still unmet, whatever this run did."""
 
 
 def _is_within(candidate: Path, root: Path) -> bool:
@@ -184,10 +189,63 @@ def _print_plan(entries: Sequence[dict[str, object]], preview: bool = False) -> 
 
 
 def check(target_raw: str | Path, channel: str | None = None) -> list[dict[str, object]]:
-    _target, catalog, state = _open_sandbox(target_raw)
+    target, catalog, state = _open_sandbox(target_raw)
     entries = plan(catalog, state, channel)
     _print_plan(entries)
+    # A check that changes nothing must still surface an earlier failure that has not cleared.
+    _raise_if_unresolved(reconcile_unresolved(target, catalog, state), state)
     return entries
+
+
+def _load_pins(target: Path) -> dict[str, str]:
+    path = target / UNRESOLVED_NAME
+    if not path.exists():
+        return {}
+    pins = _load_json(path)
+    if not all(isinstance(k, str) and isinstance(v, str) for k, v in pins.items()):
+        raise UpdateError("unresolved record must map channel/name to a target version")
+    return {str(k): str(v) for k, v in pins.items()}
+
+
+def reconcile_unresolved(
+    target: Path,
+    catalog: dict[str, dict[str, str]],
+    state: dict[str, dict[str, dict[str, object]]],
+    failed: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Re-check every recorded failure against the real state and persist what is still unmet.
+
+    A pin records the target of a failed run. Reaching that target satisfies it, and so does
+    reaching the catalog's current version, which supersedes an older target. Anything else,
+    including an update that simply never happened, stays recorded.
+    """
+    pins = {**_load_pins(target), **(failed or {})}
+    remaining: dict[str, str] = {}
+    for key, pinned in sorted(pins.items()):
+        channel, _, name = key.partition("/")
+        if _observed(state, key) not in (pinned, catalog.get(channel, {}).get(name)):
+            remaining[key] = pinned
+            print(f"UNRESOLVED   {_describe(key, pinned, state)}")
+    if pins or (target / UNRESOLVED_NAME).exists():
+        _write_json_atomic(target / UNRESOLVED_NAME, remaining)
+    return remaining
+
+
+def _observed(state: dict[str, dict[str, dict[str, object]]], key: str) -> object:
+    channel, _, name = key.partition("/")
+    return state.get(channel, {}).get(name, {}).get("version")
+
+
+def _describe(key: str, pinned: str, state: dict[str, dict[str, dict[str, object]]]) -> str:
+    return f"{key} expected {pinned}, observed {_observed(state, key)}"
+
+
+def _raise_if_unresolved(
+    remaining: dict[str, str], state: dict[str, dict[str, dict[str, object]]]
+) -> None:
+    if remaining:
+        details = "; ".join(_describe(key, pin, state) for key, pin in sorted(remaining.items()))
+        raise UnresolvedError(f"earlier update failures persist: {details}")
 
 
 def _receipt_name(now: datetime) -> str:
@@ -239,16 +297,24 @@ def apply(
         "before": before,
         "channel": channel,
         "expected_after": state,
-        "receipt_schema_version": 2,
+        "receipt_schema_version": 3,
         "verification_error": verification_error,
         "verification_passed": verification_passed,
     }
+    failed = {
+        f"{channel}/{item['name']}": str(item["available"])
+        for item in actions
+        if item["action"] == "updated" and not verification_passed
+    }
+    reread = observed if observed is not None else before
+    receipt["unresolved"] = reconcile_unresolved(target, catalog, reread, failed)
     receipts.mkdir(exist_ok=True)
     _write_json_atomic(receipt_path, receipt)
     if not verification_passed:
         raise UpdateError("post-update verification failed")
     print(f"VERIFIED     {channel}")
     print(f"RECEIPT      {receipt_path}")
+    _raise_if_unresolved(receipt["unresolved"], reread)
     return receipt_path
 
 
@@ -288,6 +354,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             apply(args.target, args.channel, args.execute)
         return 0
+    except UnresolvedError as exc:
+        print(f"update_supervisor: {exc}", file=sys.stderr)
+        return 1
     except (OSError, UpdateError) as exc:
         print(f"update_supervisor: {exc}", file=sys.stderr)
         return 2

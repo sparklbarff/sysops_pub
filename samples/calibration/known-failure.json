@@ -1,0 +1,23 @@
+{
+  "after": {
+    "cli-tools": {
+      "formatter": {
+        "running": false,
+        "version": "1.8.0"
+      }
+    }
+  },
+  "channel": "cli-tools",
+  "expected_after": {
+    "cli-tools": {
+      "formatter": {
+        "running": false,
+        "version": "2.0.0"
+      }
+    }
+  },
+  "receipt_schema_version": 3,
+  "unresolved": {},
+  "verification_error": null,
+  "verification_passed": true
+}

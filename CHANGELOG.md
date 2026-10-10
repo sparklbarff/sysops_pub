@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.10.0 - 2026-10-10
+
+- The synthetic updater keeps a failed update in `unresolved.json` and re-checks it on every later
+  check or apply, exiting 1 while any entry is unmet, so a run that changes nothing cannot hide an
+  earlier failure. An entry clears at its recorded target or the catalog's current version, which
+  supersedes an older target. Receipts move to schema 3 and carry the remaining record.
+- Add `tools/calibrate_check.py` and `samples/calibration/`: prove that a checker rejects a preserved
+  known failure with its declared exit code and diagnostic and accepts a valid case and an allowed
+  variation. Inputs and checker are fingerprinted; a run that changes them stops calibration.
+  Tests show a claim-trusting checker, a syntax error, an input-changing checker and a hang all
+  fail. The result covers the declared cases only and is not approval.
+- Both instruction starters add an assignment-and-acceptance section: preserve the user's actual
+  assignment and acceptance requirements, keep engineering validity, user outcome and approval
+  separate, calibrate repaired checks, and target and restore desktop automation.
+- Operations, quickstart, capability matrix, export manifest and parity record cover the above.
+
 ## 0.9.0 - 2026-10-09
 
 - Project adoption rejects symlinked roots, destination parents and settings-backup paths before

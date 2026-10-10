@@ -77,6 +77,8 @@ walks through adding a component, adopting the agent policy, and adopting retrie
   bundle (`--target`) or installs the project-local starters into a project you name (`--into`).
 - `tools/update_supervisor.py`, `tools/managed_job.py`: supervised updates and foreground process
   ownership, each with sanitized receipts.
+- `tools/calibrate_check.py`, `samples/calibration/`: proof that a checker rejects a preserved known
+  failure for its stated reason and accepts valid cases.
 - `tools/bootstrap.py`, `tools/verify_release.py`: the mandatory repository-local pre-push gate and
   the complete local release check.
 - `examples/`: reviewable Claude Code, Codex, and enforcement starters, plus an optional macOS iTerm2

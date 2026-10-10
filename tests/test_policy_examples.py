@@ -47,6 +47,23 @@ class PolicyExampleTests(unittest.TestCase):
                 self.assertIn("approval", text)
                 self.assertIn("unlabelled", text)
 
+    def test_both_policies_preserve_assignment_calibrate_checks_and_target_automation(
+        self,
+    ) -> None:
+        paths = (
+            ROOT / "examples" / "claude-code" / "CLAUDE.md.example",
+            ROOT / "examples" / "codex" / "AGENTS.md.example",
+        )
+        for path in paths:
+            with self.subTest(path=path.name):
+                text = " ".join(path.read_text(encoding="utf-8").split())
+                self.assertIn("revise a checker so narrower work qualifies", text)
+                self.assertIn("rejects a preserved known failure for the stated reason", text)
+                self.assertIn("is not a rejection", text)
+                self.assertIn("never creates user approval", text)
+                self.assertIn("whatever application is frontmost", text)
+                self.assertIn("restore it on completion, failure and interruption", text)
+
     def test_codex_preferences_reduce_reasoning_output_and_disable_analytics(self) -> None:
         path = ROOT / "examples" / "codex" / "config.toml.example"
         config = tomllib.loads(path.read_text(encoding="utf-8"))

@@ -95,6 +95,7 @@ COMMANDS = (
     "pre_push",
     "update_supervisor",
     "managed_job",
+    "calibrate_check",
     "search_docs",
     "eval_retrieval",
     "plan_index_refresh",
@@ -693,6 +694,17 @@ SESSIONS: dict[str, tuple[Step, ...]] = {
             "python3 tools/plan_index_refresh.py sample-project"
         ),
         Step("cat ../managed-job.json", shell=True),
+    ),
+    "calibrate_check": (
+        Step(
+            "python3 tools/calibrate_check.py "
+            "--checker samples/calibration/check_update_receipt.py "
+            "--known-failure samples/calibration/known-failure.json "
+            "--valid samples/calibration/valid.json "
+            "--allowed-variation samples/calibration/allowed-variation.json "
+            '--diagnostic "persisted state differs from expected" -- '
+            "python3 samples/calibration/check_update_receipt.py {case}"
+        ),
     ),
     "search_docs": (
         Step(

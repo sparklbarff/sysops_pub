@@ -21,8 +21,15 @@ Retain the package error and verify the package's actual consumer, not only its 
 receipt. For example, an installed Python package can still import an older copy if linking failed.
 
 The synthetic updater demonstrates independent verification by reopening the state it wrote and
-checking both the expected update and preservation of unselected channels. Its version-2 receipt
+checking both the expected update and preservation of unselected channels. Its version-3 receipt
 separates expected state from observed state. A dropped or collateral write cannot earn VERIFIED.
+
+A failed verification also records each item's target in `unresolved.json` inside the sandbox.
+Every later check or apply re-reads that record against the real state and exits 1 while any entry
+is unmet, so a run that changes nothing cannot read as all-clear. An entry clears when the item
+reaches its recorded target or the catalog's current version, which supersedes an older target.
+Without that second condition, a record written before a newer release could never clear; without
+the record, an update that never happened would vanish behind the next generic check.
 
 ## Validation admission
 
@@ -55,6 +62,19 @@ Version-2 receipts state whether the group is terminal. Zombie processes do not 
 This is group ownership, not confinement of a child that deliberately creates another session.
 Windows retains leading-process termination only; complete descendant ownership needs a native Job
 Object adapter. The reference does not claim that missing adapter or native Windows execution proof.
+
+## Acceptance calibration
+
+A repaired check is evidence only after it has discriminated real cases. Keep the failure that
+motivated the repair, then prove that the same checker rejects it for the stated reason and
+accepts a valid case and a relevant allowed variation. `tools/calibrate_check.py` runs one fixed
+command against those three inputs, requires the declared exit code and diagnostic for the
+rejection, fingerprints the checker and inputs, and stops if a run changes any of them. A crash,
+syntax error or missing dependency exits nonzero without the diagnostic and therefore fails.
+
+Do not pass expected labels to the checker, shrink the population or move the floor to obtain a
+pass. A verified calibration covers the declared cases only. It is not product acceptance, review
+readiness or owner approval, and automated review never creates that approval.
 
 ## Cross-runtime continuity
 

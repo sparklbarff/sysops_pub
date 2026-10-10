@@ -37,6 +37,56 @@ class UpdateSupervisorTests(unittest.TestCase):
             self.assertEqual(len(receipts), 1)
             self.assertFalse(json.loads(receipts[0].read_text())["verification_passed"])
 
+    def test_failed_update_persists_until_a_later_run_resolves_it(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
+            target = Path(directory) / "sandbox"
+            update_supervisor.initialize(target, execute=True)
+            original = (target / update_supervisor.STATE_NAME).read_bytes()
+            writer = update_supervisor._write_json_atomic
+
+            def dropped_write(path: Path, value: object) -> None:
+                if path.name == update_supervisor.STATE_NAME:
+                    path.write_bytes(original)
+                else:
+                    writer(path, value)
+
+            first = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+            with (
+                mock.patch.object(update_supervisor, "_write_json_atomic", dropped_write),
+                self.assertRaisesRegex(update_supervisor.UpdateError, "verification failed"),
+            ):
+                update_supervisor.apply(target, "cli-tools", execute=True, clock=lambda: first)
+            record = target / update_supervisor.UNRESOLVED_NAME
+            self.assertEqual(json.loads(record.read_text()), {"cli-tools/formatter": "2.0.0"})
+            # A plain check that changes nothing must not read as all-clear.
+            with self.assertRaisesRegex(update_supervisor.UnresolvedError, "cli-tools/formatter"):
+                update_supervisor.check(target)
+            later = datetime(2026, 1, 2, 3, 4, 6, tzinfo=UTC)
+            update_supervisor.apply(target, "cli-tools", execute=True, clock=lambda: later)
+            self.assertEqual(json.loads(record.read_text()), {})
+            update_supervisor.check(target)
+
+    def test_pin_is_satisfied_by_the_catalog_current_version(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
+            target = Path(directory) / "sandbox"
+            update_supervisor.initialize(target, execute=True)
+            update_supervisor.apply(target, "cli-tools", execute=True)
+            record = target / update_supervisor.UNRESOLVED_NAME
+            # The failed run targeted 1.9.0; the catalog has since moved to 2.0.0, now installed.
+            record.write_text(json.dumps({"cli-tools/formatter": "1.9.0"}), encoding="utf-8")
+            update_supervisor.check(target)
+            self.assertEqual(json.loads(record.read_text()), {})
+
+    def test_pin_still_fails_when_the_update_never_happened(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
+            target = Path(directory) / "sandbox"
+            update_supervisor.initialize(target, execute=True)
+            record = target / update_supervisor.UNRESOLVED_NAME
+            record.write_text(json.dumps({"desktop-apps/model-runner": "1.5.0"}), encoding="utf-8")
+            with self.assertRaisesRegex(update_supervisor.UnresolvedError, "observed 1.4.0"):
+                update_supervisor.check(target)
+            self.assertEqual(json.loads(record.read_text()), {"desktop-apps/model-runner": "1.5.0"})
+
     def test_verification_rejects_changes_to_an_unselected_channel(self) -> None:
         with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
             target = Path(directory) / "sandbox"

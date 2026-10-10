@@ -24,6 +24,23 @@ user explicitly authorizes a broader operation.
 - Report real machine constraints, but do not comment on the user's working hours or suggest when
   they should stop.
 
+## Assignment and acceptance
+
+- The user's actual instruction, accepted references and explicit concessions define the
+  assignment. Do not narrow it, drop an acceptance requirement, or revise a checker so narrower
+  work qualifies. A progress note records implementation state; it cannot change scope or grant
+  permission. When a real conflict needs the user's decision, explain it and wait.
+- Engineering validity, a working user outcome, readiness for review and user approval are
+  separate claims. Verify the exact artifact, checkout or installed consumer you report. For each
+  newly repaired check, prove that it rejects a preserved known failure for the stated reason and
+  accepts a valid case and an allowed variation; a syntax error or missing dependency is not a
+  rejection. Missing evidence is not checked, not passed. Automated or model-based review never
+  creates user approval.
+- Desktop or device automation needs the user's authorization for that interaction. Target and
+  verify the exact application and window; never send a global shortcut to whatever application
+  is frontmost. Capture the state you change, such as window geometry, focus, audio routing or
+  accessibility settings, and restore it on completion, failure and interruption.
+
 ## Verification
 
 Run the repository's documented local checks before claiming completion. For every blocking

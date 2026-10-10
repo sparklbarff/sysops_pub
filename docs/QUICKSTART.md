@@ -131,8 +131,19 @@ python3 tools/managed_job.py --receipt ../managed-job.json --timeout 60 -- pytho
 The receipt omits raw command arguments. On POSIX the runner cleans up only its owned group and
 checks terminal ownership even when the leading process reports success. Leftover children produce
 exit 125, not success. Windows does not yet have descendant ownership through Job Objects.
-The updater and runner use version-2 receipts; the updater's observed state comes from fresh disk
-readback, not the dictionary its apply step changed.
+The updater uses version-3 receipts and the runner version-2 receipts; the updater's observed state
+comes from fresh disk readback, not the dictionary its apply step changed. A failed update stays in
+the sandbox's `unresolved.json`, and every later check exits 1 until the item is actually resolved.
+
+Prove that a checker discriminates real cases before trusting it:
+
+```text
+python3 tools/calibrate_check.py --checker samples/calibration/check_update_receipt.py --known-failure samples/calibration/known-failure.json --valid samples/calibration/valid.json --allowed-variation samples/calibration/allowed-variation.json --diagnostic "persisted state differs from expected" -- python3 samples/calibration/check_update_receipt.py {case}
+```
+
+The preserved failure is a receipt that claimed verification after a dropped write. The checker
+must reject it with that diagnostic and accept both valid receipts; the result names every input
+by hash and covers those declared cases only.
 
 See `docs/OPERATIONS.md` before adapting these examples to a shared service, concurrent validation,
 or a repository whose evidence spans coding-agent runtimes.

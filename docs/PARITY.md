@@ -8,12 +8,15 @@ without re-reading the whole repository.
 
 ## Last audit
 
-- Date: 2026-10-09
-- Private operations reference: October 9 source and deployed-control audit.
-- Scope: the capability matrix, public instruction/configuration starters, control and delivery
-  mechanisms, retrieval contracts, adoption boundary, and process/update receipts. The review
-  distinguishes executable public controls from design-only operational guidance and deliberate
-  omissions. It does not claim native execution on Windows or Linux.
+- Date: 2026-10-10
+- Private operations reference: changes after the October 9 audit, namely the shared behavioral
+  rules (assignment preservation, outcome-specific acceptance, desktop-automation targeting), the
+  acceptance-calibration helper, and the updater's package-health and unresolved-failure handling.
+- Scope: the capability matrix, both instruction starters, supervised updates, acceptance
+  calibration, the export manifest, and the operations and quickstart guides. Runtime-specific
+  service changes in the same period (daemon startup directory, workspace trust, a client version
+  update) stay out of scope: this reference claims no service adapter. It does not claim native
+  execution on Windows or Linux.
 
 ## Evidence and changes
 
@@ -21,10 +24,11 @@ without re-reading the whole repository.
 |---|---|---|
 | Registry, preview, scoped apply, independent verification and drift | `tools/control.py`, `tests/test_control.py`, isolated demo tests | Synthetic file controller, not a live workstation adapter |
 | Bootstrap and delivery | `tools/bootstrap.py`, `tools/pre_push.py`, `.githooks/pre-push`, their tests | Exact outgoing commits remain the delivery unit; no global installation |
-| Agent policy and browser selection | `examples/claude-code/`, `examples/codex/`, `tests/test_policy_examples.py` | Starters preserve publication boundaries, cross-runtime evidence, explicit browser choice and readable output |
+| Agent policy and browser selection | `examples/claude-code/`, `examples/codex/`, `tests/test_policy_examples.py` | Starters preserve publication boundaries, cross-runtime evidence, explicit browser choice, readable output, the user's assignment, outcome-specific acceptance and targeted desktop automation |
 | Scope and grounding advisories | `examples/enforcement/`, their tests | Advice and blocking controls are distinct; installing policy is not behavioral proof |
 | Local retrieval and evaluation | `tools/search_docs.py`, `tools/plan_index_refresh.py`, `tools/eval_retrieval.py`, their tests and `tools/case_exercises.py` | Synthetic retrieval evidence remains separate from answer quality |
-| Supervised updates | `tools/update_supervisor.py`, `tests/test_update_supervisor.py` | Verification now reopens persisted state and checks the complete expected state, including unselected channels |
+| Supervised updates | `tools/update_supervisor.py`, `tests/test_update_supervisor.py` | Verification reopens persisted state and checks the complete expected state, including unselected channels; a failed update persists in `unresolved.json` until a later run reaches its target or the catalog's current version |
+| Acceptance calibration | `tools/calibrate_check.py`, `samples/calibration/`, `tests/test_calibrate_check.py` | Rejection must carry the declared code and diagnostic; claim-trusting, syntax-error, input-changing and hanging checkers fail; declared cases only |
 | Process ownership | `tools/managed_job.py`, `tests/test_managed_job.py` | POSIX group termination is verified independently of leader exit; surviving children cannot produce a success receipt |
 | Runtime reconciliation and validation admission | `docs/OPERATIONS.md`, `docs/CAPABILITY_MATRIX.md` | Current operating disciplines are documented; no public daemon adapter, scheduler or memory sampler is claimed |
 | Adoption | `tools/adopt.py`, `tests/test_adopt.py`, `docs/ADAPTATION_GUIDE.md` | Explicit, project-scoped and non-overwriting; existing identity and governance take precedence |
@@ -40,6 +44,13 @@ Adoption also rejects symlinked roots and destination parents before any project
 checks preview and execution with external `.claude` and `.agent-tools` links, preserving both the
 project's instructions and the outside directory. Existing non-symlink project installation remains
 an admitted control.
+
+The October 10 refresh followed the same discipline. Each new update test failed against the
+previous code on behavior, not on a missing name: no record was written, an outdated record never
+cleared, and an update that never happened raised nothing. The calibration tests were first run
+against an always-pass stub, which seven of eight rejected; the eighth checks the valid path and
+is indifferent to that stub by design. The private updater repair that motivated the record rule
+came from a real case where a pinned target could never be met after a newer release installed.
 
 The complete local release verifier covers dependency-free tests, case exercises, JSON/TOML syntax,
 tree cleanliness, formatting, linting, secret scans and mandatory hook wiring. These checks are
