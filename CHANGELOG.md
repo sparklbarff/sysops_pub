@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.1 - 2026-10-10
+
+- Fix the pre-push gate to verify every commit a push publishes, not only the tip of each ref. It
+  read one object ID per ref record, so the 0.10.0 push of two commits verified only its tip,
+  6b61b1b, and published 1541a09 without its own check. A problem in an intermediate commit that a
+  later commit fixed would reach public history the same way. The range is now each pushed object
+  minus the remote ref's current value and every remote-tracking ref, verified oldest first; a
+  remote value this clone has not fetched refuses the push. A test with a failing commit under a
+  passing tip fails on the old gate.
+
 ## 0.10.0 - 2026-10-10
 
 - The synthetic updater keeps a failed update in `unresolved.json` and re-checks it on every later

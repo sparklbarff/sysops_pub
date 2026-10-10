@@ -22,10 +22,9 @@ def _is_null_sha(value: str) -> bool:
     return bool(value) and set(value) == {"0"}
 
 
-def parse_outgoing_shas(lines: Iterable[str]) -> list[str]:
-    """Return unique outgoing object IDs from Git's pre-push stdin protocol."""
-    shas: list[str] = []
-    seen: set[str] = set()
+def parse_outgoing_refs(lines: Iterable[str]) -> list[tuple[str, str]]:
+    """Return unique (local, remote) object ID pairs from Git's pre-push stdin protocol."""
+    refs: list[tuple[str, str]] = []
     for line_number, raw_line in enumerate(lines, start=1):
         line = raw_line.strip()
         if not line:
@@ -33,15 +32,16 @@ def parse_outgoing_shas(lines: Iterable[str]) -> list[str]:
         fields = line.split()
         if len(fields) != 4:
             raise PrePushError(f"malformed pre-push input on line {line_number}")
-        _local_ref, local_sha, _remote_ref, _remote_sha = fields
+        _local_ref, local_sha, _remote_ref, remote_sha = fields
         if _is_null_sha(local_sha):
             continue
         if OBJECT_ID_PATTERN.fullmatch(local_sha) is None:
             raise PrePushError(f"invalid outgoing object ID on line {line_number}")
-        if local_sha not in seen:
-            seen.add(local_sha)
-            shas.append(local_sha)
-    return shas
+        if OBJECT_ID_PATTERN.fullmatch(remote_sha) is None:
+            raise PrePushError(f"invalid remote object ID on line {line_number}")
+        if (local_sha, remote_sha) not in refs:
+            refs.append((local_sha, remote_sha))
+    return refs
 
 
 def _git(*arguments: str) -> subprocess.CompletedProcess[str]:
@@ -52,6 +52,33 @@ def _git(*arguments: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
     )
+
+
+def outgoing_commits(refs: Iterable[tuple[str, str]]) -> list[str]:
+    """Every commit the push would publish, oldest first, not only each ref's tip.
+
+    A commit is outgoing when it is reachable from the pushed object and from neither the remote
+    ref's current value nor any remote-tracking ref. A remote value this clone has never fetched
+    cannot bound the range, so the push is refused rather than verified on a guess.
+    """
+    commits: list[str] = []
+    for local_sha, remote_sha in refs:
+        excluded = ["--remotes"]
+        if not _is_null_sha(remote_sha):
+            known = _git("cat-file", "-e", f"{remote_sha}^{{commit}}")
+            if known.returncode:
+                raise PrePushError(
+                    f"remote commit {remote_sha} is not in this clone; fetch before pushing"
+                )
+            excluded.insert(0, remote_sha)
+        listed = _git("rev-list", "--reverse", "--topo-order", local_sha, "--not", *excluded)
+        if listed.returncode:
+            detail = listed.stderr.strip() or f"git rev-list returned {listed.returncode}"
+            raise PrePushError(f"cannot list outgoing commits for {local_sha}: {detail}")
+        for commit in listed.stdout.split():
+            if commit not in commits:
+                commits.append(commit)
+    return commits
 
 
 def verify_outgoing_sha(sha: str) -> None:
@@ -110,7 +137,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"pre-push: {usage_error}", file=sys.stderr)
         return 2
     try:
-        outgoing_shas = parse_outgoing_shas(sys.stdin)
+        outgoing_shas = outgoing_commits(parse_outgoing_refs(sys.stdin))
         if not outgoing_shas:
             print("pre-push: no outgoing commits require verification")
             return 0
