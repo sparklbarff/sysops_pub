@@ -6,3 +6,5 @@ __pycache__/
 reports/
 demo-output/
 _site/
+# Drafts for the author's revision stay on this machine until they pass the disclosure gate.
+docs/writing/
