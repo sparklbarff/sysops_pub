@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -20,6 +21,19 @@ VERIFIER = """\
 from pathlib import Path
 
 raise SystemExit(0 if Path("fixture.txt").read_text() == "valid\\n" else 1)
+"""
+
+# A declared gate: passes only from a valid tree AND when handed the commit it is verifying.
+DECLARED_CHECKER = """\
+import subprocess
+import sys
+from pathlib import Path
+
+head = subprocess.run(
+    ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+).stdout.strip()
+valid = Path("fixture.txt").read_text() == "valid\\n" and sys.argv[1] == head
+raise SystemExit(0 if valid else 1)
 """
 
 
@@ -112,7 +126,7 @@ class PrePushTests(unittest.TestCase):
                 mock.patch.object(pre_push, "REPO_ROOT", repository),
                 mock.patch.object(pre_push.sys, "stdin", protocol),
                 mock.patch.object(pre_push.sys, "stdout", stdout),
-                mock.patch.object(pre_push, "verify_outgoing_sha") as verify,
+                mock.patch.object(pre_push, "verify_outgoing_sha", return_value=True) as verify,
             ):
                 self.assertEqual(pre_push.main([]), 0)
             self.assertEqual(verify.call_args_list, [mock.call(first), mock.call(second)])
@@ -136,6 +150,91 @@ class PrePushTests(unittest.TestCase):
                 self.assertRaisesRegex(pre_push.PrePushError, "fetch before pushing"),
             ):
                 pre_push.outgoing_commits([(tip, "3" * 40)])
+
+    def _declared_repository(self, directory: str, command: object, checker: bool = True) -> Path:
+        """A clone whose pyproject declares its own gate and carries no verify_release.py."""
+        repository = Path(directory) / "repository"
+        repository.mkdir()
+        _git(repository, "init", "-q")
+        _git(repository, "config", "user.email", "test" + "@" + "example.invalid")
+        _git(repository, "config", "user.name", "Test User")
+        _git(repository, "config", "commit.gpgsign", "false")
+        (repository / "pyproject.toml").write_text(
+            f"[tool.sysops_pub.gate]\ncommand = {json.dumps(command)}\n", encoding="utf-8"
+        )
+        if checker:
+            (repository / "check.py").write_text(DECLARED_CHECKER, encoding="utf-8")
+        return repository
+
+    def test_declared_gate_runs_in_the_worktree_with_the_commit_identity(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
+            repository = self._declared_repository(directory, ["python3", "check.py", "{commit}"])
+            good = _commit(repository, "valid\n", "passes its own gate")
+            with (
+                mock.patch.object(pre_push, "REPO_ROOT", repository),
+                mock.patch.object(pre_push.sys, "stdout", io.StringIO()),
+            ):
+                self.assertTrue(pre_push.verify_outgoing_sha(good))
+                bad = _commit(repository, "invalid\n", "fails its own gate")
+                with self.assertRaisesRegex(pre_push.PrePushError, "release verification failed"):
+                    pre_push.verify_outgoing_sha(bad)
+
+    def test_declared_gate_whose_command_is_missing_refuses_the_push(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
+            repository = self._declared_repository(
+                directory, ["no-such-gate-tool-9f3c", "{commit}"], checker=False
+            )
+            sha = _commit(repository, "valid\n", "declares an absent tool")
+            with (
+                mock.patch.object(pre_push, "REPO_ROOT", repository),
+                self.assertRaisesRegex(pre_push.PrePushError, "not available"),
+            ):
+                pre_push.verify_outgoing_sha(sha)
+
+    def test_malformed_gate_declaration_refuses_the_push(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
+            repository = self._declared_repository(directory, "python3 check.py")
+            sha = _commit(repository, "valid\n", "declares a string, not a list")
+            with (
+                mock.patch.object(pre_push, "REPO_ROOT", repository),
+                self.assertRaisesRegex(pre_push.PrePushError, "non-empty list"),
+            ):
+                pre_push.verify_outgoing_sha(sha)
+
+    def test_a_verified_tree_is_not_verified_again_in_this_clone(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
+            repository = _repository(directory)
+            published = _commit(repository, "valid\n", "already on the remote")
+            _git(repository, "update-ref", "refs/remotes/origin/main", published)
+            tip = _commit(repository, "valid\n", "same tree as the published commit")
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(pre_push, "REPO_ROOT", repository),
+                mock.patch.object(pre_push.sys, "stdout", stdout),
+            ):
+                self.assertTrue(pre_push.verify_outgoing_sha(tip))
+                self.assertFalse(pre_push.verify_outgoing_sha(tip))
+                (repository / "extra.txt").write_text("another file\n", encoding="utf-8")
+                changed = _commit(repository, "valid\n", "a different tree")
+                self.assertTrue(pre_push.verify_outgoing_sha(changed))
+                protocol = io.StringIO(f"refs/heads/main {changed} refs/heads/main {published}\n")
+                with mock.patch.object(pre_push.sys, "stdin", protocol):
+                    self.assertEqual(pre_push.main([]), 0)
+            output = stdout.getvalue()
+            self.assertIn("already verified in this clone; skipping", output)
+            self.assertIn("verified 0 outgoing commit(s), 2 already verified", output)
+            memo = repository / ".git" / pre_push.MEMO_NAME
+            self.assertEqual(len(memo.read_text(encoding="utf-8").splitlines()), 2)
+
+    def test_memo_key_names_the_tree_and_the_gate_command(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
+            repository = _repository(directory)
+            first = _commit(repository, "valid\n", "first")
+            second = _commit(repository, "valid\n", "second, same tree")
+            with mock.patch.object(pre_push, "REPO_ROOT", repository):
+                default = pre_push.memo_key(first, pre_push.DEFAULT_GATE)
+                self.assertEqual(default, pre_push.memo_key(second, pre_push.DEFAULT_GATE))
+                self.assertNotEqual(default, pre_push.memo_key(first, ["make", "check"]))
 
     def test_outgoing_commit_is_verified_instead_of_staged_worktree(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:

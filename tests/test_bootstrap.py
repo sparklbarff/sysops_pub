@@ -74,6 +74,32 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(result, 2)
         self.assertIn("not executable", stderr)
 
+    def test_declared_tools_replace_the_default_four(self) -> None:
+        pyproject = self.repository / "pyproject.toml"
+        hook = self.repository / ".githooks" / "pre-push"
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with (
+            mock.patch.object(bootstrap, "REPO_ROOT", self.repository),
+            mock.patch.object(bootstrap, "PRE_PUSH", hook),
+            contextlib.redirect_stdout(stdout),
+            contextlib.redirect_stderr(stderr),
+        ):
+            pyproject.write_text("[tool.sysops_pub.gate]\ntools = []\n", encoding="utf-8")
+            self.assertEqual(bootstrap.release_tools(), ())
+            self.assertEqual(bootstrap.main(["--execute"]), 0, stderr.getvalue())
+            pyproject.write_text(
+                '[tool.sysops_pub.gate]\ntools = ["no-such-gate-tool-9f3c"]\n', encoding="utf-8"
+            )
+            self.assertEqual(bootstrap.main(["--check"]), 2)
+            pyproject.write_text('[tool.sysops_pub.gate]\ntools = "black"\n', encoding="utf-8")
+            self.assertEqual(bootstrap.main(["--check"]), 2)
+            pyproject.unlink()
+            self.assertEqual(bootstrap.release_tools(), bootstrap.DEFAULT_RELEASE_TOOLS)
+        self.assertIn("no-such-gate-tool-9f3c", stderr.getvalue())
+        self.assertIn("list of command names", stderr.getvalue())
+        self.assertEqual(self.configured_hooks_path(), ".githooks")
+
     def test_execute_reports_missing_release_tools_before_wiring(self) -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()

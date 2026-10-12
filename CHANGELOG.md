@@ -2,6 +2,17 @@
 
 ## 0.11.0 - 2026-10-12
 
+- Make the pre-push gate adoptable and cheaper to retry. The driver demanded this repository's own
+  verifier at a fixed path inside every outgoing commit. It now runs the command the commit's own
+  `pyproject.toml` declares under `[tool.sysops_pub.gate]`, with `{commit}` replaced by the
+  commit's identity, and falls back to this repository's verifier when nothing is declared; a
+  declared command that is missing or malformed refuses the push. Bootstrap reads the tools the
+  declared gate needs from the same table. A tree this clone has already verified with the same
+  command is not verified again, so a push retried after a failure re-runs only the commits that
+  changed; the memo lives untracked inside the Git directory, records the tree and the command but
+  not the tools' versions, and can be deleted to force a full run. This repository declares its own
+  gate explicitly, and tests cover a declared gate that passes and fails from its own tree, a
+  missing command, a malformed declaration, and the memo.
 - Wire the guards for Codex. Codex documents hooks that can block, so the scope guard gains a
   Codex mode that reads every file an `apply_patch` payload names from the patch header and
   requires all of them to stay under the session's working directory, and a project hooks file

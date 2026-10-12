@@ -106,6 +106,28 @@ py -3 tools/adopt.py --into ..\my-project --tool both
 py -3 tools/adopt.py --into ..\my-project --tool both --execute
 ```
 
+## Adopt the gate in your own project
+
+The pre-push gate is three files: `.githooks/pre-push`, `tools/pre_push.py` and
+`tools/bootstrap.py`. Copy them into your project at the same paths, then declare your gate in
+your `pyproject.toml`:
+
+```toml
+[tool.sysops_pub.gate]
+command = ["make", "check"]
+tools = ["make"]
+```
+
+The command runs from a temporary detached worktree of each outgoing commit, with `{commit}`
+replaced by that commit's identity wherever you use it, and the tools are the commands bootstrap
+requires on `PATH` before it wires the hook. Without the table the driver assumes this repository's
+own gate. Then install the hook as above with `python3 tools/bootstrap.py --execute`.
+
+A tree this clone has already verified with the same command is not verified again, so a push
+retried after a failure re-runs only the commits that changed. The memo lives inside `.git`, is
+never tracked, records the tree and the command but not the versions of the tools, and deleting
+`.git/sysops-pub-verified-trees` forces a full re-verification.
+
 ## Try supervised operations
 
 Create a disposable synthetic update state outside the repository:

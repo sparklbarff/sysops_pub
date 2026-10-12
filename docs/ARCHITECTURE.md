@@ -72,8 +72,11 @@ refresh planning maps one repository identity to every owned index. Treating tha
 one-to-one can leave a secondary index stale while the refresh hook itself appears healthy.
 
 The tracked pre-push control applies this model literally. It consumes Git's outgoing ref records,
-materializes each outgoing commit in a temporary detached worktree, and runs the verifier contained
-in that commit. Unit tests separately prove that the tracked shell launcher reaches this driver.
+materializes each outgoing commit in a temporary detached worktree, and runs the gate that commit
+declares in its own project file, or this repository's verifier when it declares none. A tree this
+clone has already verified with the same command is not verified again; the memo records the tree
+and the command, not the tools' versions, and lives untracked inside the Git directory. Unit tests
+separately prove that the tracked shell launcher reaches this driver.
 
 ## Supervised operations
 
