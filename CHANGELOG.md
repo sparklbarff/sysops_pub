@@ -2,6 +2,17 @@
 
 ## 0.11.0 - 2026-10-12
 
+- Add a command guard and a read guard, and wire both in the Claude Code settings starters beside
+  the scope guard. The command guard judges a Bash command or a WebFetch URL by parsed structure
+  and blocks five classes: credential reads including the keychain, credential and configuration
+  writes including a new remote, recursive deletes and pipe-to-shell and decoded-eval commands and
+  raw device writes, a pipe after `git push` that would mask its exit status, and fetches of
+  private or local addresses. The read guard records every read and write per session, blocks an
+  Edit of a file not read this session or changed on disk since, and blocks a shell command that
+  names a path with a pending stale block until the file is read again. Both fail closed on
+  malformed input, run on Codex payloads of the same shape, and ship with block-and-admit tests at
+  the process boundary; the wiring test runs the adopted settings' commands end to end. The
+  adoption tool installs both guards, and the export manifest records them as reimplementations.
 - Keep the managed-job ownership probe in-process. It listed the process group through ps, and a
   sandboxed runtime that refuses to spawn setuid executables made that probe report unknown
   ownership, and so exit 125, on every job, success included. The probe is now a null signal to

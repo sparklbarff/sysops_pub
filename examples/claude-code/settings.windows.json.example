@@ -7,7 +7,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
@@ -15,6 +15,76 @@
             "args": [
               "-3",
               "${CLAUDE_PROJECT_DIR}/.agent-tools/scope_guard.py",
+              "--claude-hook"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py",
+            "args": [
+              "-3",
+              "${CLAUDE_PROJECT_DIR}/.agent-tools/read_guard.py",
+              "check",
+              "--claude-hook"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py",
+            "args": [
+              "-3",
+              "${CLAUDE_PROJECT_DIR}/.agent-tools/command_guard.py",
+              "--claude-hook"
+            ]
+          },
+          {
+            "type": "command",
+            "command": "py",
+            "args": [
+              "-3",
+              "${CLAUDE_PROJECT_DIR}/.agent-tools/read_guard.py",
+              "shell",
+              "--claude-hook"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py",
+            "args": [
+              "-3",
+              "${CLAUDE_PROJECT_DIR}/.agent-tools/command_guard.py",
+              "--claude-hook"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read|Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py",
+            "args": [
+              "-3",
+              "${CLAUDE_PROJECT_DIR}/.agent-tools/read_guard.py",
+              "record",
               "--claude-hook"
             ]
           }

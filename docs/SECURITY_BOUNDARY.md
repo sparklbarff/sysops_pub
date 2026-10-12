@@ -12,7 +12,8 @@ treated as already published the moment it is committed.
 - The demo target is disposable and marked by the controller.
 - No tracked script requires elevated privileges.
 - No default command changes the host operating system.
-- Claude Code hooks are advisory or narrowly scoped examples.
+- Claude Code hooks are narrowly scoped block-and-admit examples that see only what their events
+  carry: a file path, a command line, a URL.
 - Codex safety relies primarily on its sandbox and approval policy. Its hooks can block, but trust
   in each hook is granted by the human, never written by an installer.
 

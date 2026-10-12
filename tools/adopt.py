@@ -63,6 +63,14 @@ def _sources(tool: str, platform: str) -> list[tuple[Path, Path]]:
                     Path("claude-code/.agent-tools/scope_guard.py"),
                 ),
                 (
+                    REPO_ROOT / "examples" / "enforcement" / "command_guard.py",
+                    Path("claude-code/.agent-tools/command_guard.py"),
+                ),
+                (
+                    REPO_ROOT / "examples" / "enforcement" / "read_guard.py",
+                    Path("claude-code/.agent-tools/read_guard.py"),
+                ),
+                (
                     REPO_ROOT / "examples" / "claude-code" / settings_name,
                     Path("claude-code/.claude/settings.json"),
                 ),
@@ -175,6 +183,11 @@ def _install_targets(tool: str, platform: str) -> list[tuple[Path, Path]]:
                 (examples / "claude-code" / "CLAUDE.md.example", Path("CLAUDE.md")),
                 (examples / "claude-code" / "PLAYWRIGHT.md.example", Path("PLAYWRIGHT.md")),
                 (examples / "enforcement" / "scope_guard.py", Path(".agent-tools/scope_guard.py")),
+                (
+                    examples / "enforcement" / "command_guard.py",
+                    Path(".agent-tools/command_guard.py"),
+                ),
+                (examples / "enforcement" / "read_guard.py", Path(".agent-tools/read_guard.py")),
                 (examples / "claude-code" / settings_name, SETTINGS_REL),
             ]
         )

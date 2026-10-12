@@ -13,6 +13,8 @@ repository. Nothing crosses merely because it is tracked or technically reusable
 | Apply, verify, drift, and report orchestration | `tools/control.py` | Reimplement | Keep the control loop while removing host assumptions and mutation risk |
 | Validation libraries and mocks | `tools/`, `tests/` | Reimplement | Provide executable proofs using only temporary fixtures |
 | Enforcement hooks and wiring checks | `examples/enforcement/` | Reimplement | Show block/admit behavior without private paths or commands |
+| Command, credential, publication and fetch guard | `examples/enforcement/command_guard.py` | Reimplement | Preserve the block classes and the parse-structure-not-substring discipline with synthetic commands; no private paths, hosts, commands or incident detail |
+| Read-before-edit and stale-read guards | `examples/enforcement/read_guard.py` | Reimplement | Preserve record, check and shell-route semantics and per-session state outside the project; no private state format or paths |
 | Claude Code configuration | `examples/claude-code/` | Rewrite | Explain hooks and identity without copying live settings |
 | Codex configuration | `examples/codex/` | Rewrite | Explain sandbox and instructions without copying live config |
 | Local RAG policy and receipts | `samples/rag/` | Reimplement | Demonstrate the contract over a synthetic corpus; make Ollama optional |

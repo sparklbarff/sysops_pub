@@ -8,10 +8,16 @@ Claude Code can combine repository instructions with lifecycle hooks.
 4. Give every blocking hook an executable test proving both block and admit behavior.
 5. Keep Git hooks and repository validators as independent acceptance evidence.
 
-The POSIX and Windows settings examples wire the sample scope guard to `PreToolUse` for `Write` and
-`Edit`. The guard exits 2 when a file path resolves outside `CLAUDE_PROJECT_DIR`, when the project
-root is unavailable, or when hook input is malformed or lacks a supported path. The test suite
-feeds real JSON through stdin and proves both block and admit behavior.
+The POSIX and Windows settings examples wire three guards from `examples/enforcement/`. The scope
+guard runs on `PreToolUse` for `Write`, `Edit` and `NotebookEdit` and exits 2 when a file path
+resolves outside `CLAUDE_PROJECT_DIR`, when the project root is unavailable, or when hook input is
+malformed or lacks a supported path. The command guard runs on `PreToolUse` for `Bash` and
+`WebFetch` and blocks credential reads and writes, recursive deletes and pipe-to-shell commands, a
+pipe after `git push`, and fetches of private addresses. The read guard records every `Read`,
+`Write`, `Edit` and `NotebookEdit` on `PostToolUse`, blocks an `Edit` or `NotebookEdit` of a file
+not read this session or changed since, and blocks a `Bash` command that names a path with a
+pending stale block. The test suite feeds real JSON through stdin to each guard and runs the
+adopted settings' commands end to end, proving both block and admit behavior.
 
 Both settings examples also deny the named `Artifact` tool. This is a narrow mechanical control for
 one known publication path. The accompanying project instructions state the broader rule because a

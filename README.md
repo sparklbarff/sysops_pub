@@ -110,7 +110,7 @@ Not every tool here is meant to run against your project. Three tiers:
 | Tier | Tools | What it means |
 |---|---|---|
 | Run it | `tools/managed_job.py`, `tools/calibrate_check.py` | Usable as-is from this checkout against any project today |
-| Copy it | `tools/pre_push.py` with `tools/bootstrap.py` and `tools/verify_release.py`; `examples/enforcement/scope_guard.py` with the settings and instruction starters; `scripts/disclosure_scan.py` | Patterns to copy into your project and edit: the gate expects this repository's verifier, the guard covers one hook event, and the scanner is rooted here |
+| Copy it | `tools/pre_push.py` with `tools/bootstrap.py` and `tools/verify_release.py`; `examples/enforcement/scope_guard.py`, `examples/enforcement/command_guard.py` and `examples/enforcement/read_guard.py` with the settings and instruction starters; `scripts/disclosure_scan.py` | Patterns to copy into your project and edit: the gate expects this repository's verifier, the guards install as-is through the adoption tool but see only what their hook events carry, and the scanner is rooted here |
 | Read it | `tools/control.py`, `tools/demo.py`, `tools/update_supervisor.py`, `tools/search_docs.py`, `tools/eval_retrieval.py`, `tools/plan_index_refresh.py`, `tools/case_exercises.py`, `examples/enforcement/grounding_classifier.py`, `examples/macos/iterm_agent_status.py` | Demonstrations of a contract over sandboxes or synthetic inputs; the retrieval tools accept your own corpus but rank by token overlap |
 
 `tools/adopt.py`, `tools/test.py` and `tools/build_site.py` are this repository's own installer,
