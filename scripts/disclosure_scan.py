@@ -139,7 +139,12 @@ def _hash_bound_entries(value: object, label: str) -> dict[str, dict[str, str]]:
     return entries
 
 
-def _allowlist() -> tuple[set[str], dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+HISTORY_FINDING_PATTERN = re.compile(r"^[0-9a-f]{40}:[^\s:][^:]*: [^:]+$")
+HashBound = dict[str, dict[str, str]]
+Allowlist = tuple[set[str], HashBound, HashBound, set[str]]
+
+
+def _allowlist() -> Allowlist:
     try:
         value = json.loads(ALLOWLIST_PATH.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError) as exc:
@@ -149,13 +154,20 @@ def _allowlist() -> tuple[set[str], dict[str, dict[str, str]], dict[str, dict[st
     findings = value.get("findings")
     if not isinstance(findings, list) or not all(isinstance(item, str) for item in findings):
         raise ScanError("disclosure allowlist findings must be a list of strings")
+    history = value.get("history_findings", [])
+    if not isinstance(history, list) or not all(
+        isinstance(item, str) and HISTORY_FINDING_PATTERN.fullmatch(item) for item in history
+    ):
+        raise ScanError(
+            "disclosure allowlist history_findings must be '<full commit>:<path>: <label>' strings"
+        )
     binary_files = _hash_bound_entries(value.get("binary_files"), "binary_files")
     omission_files = _hash_bound_entries(value.get("omission_files"), "omission_files")
-    return set(findings), binary_files, omission_files
+    return set(findings), binary_files, omission_files, set(history)
 
 
 def scan() -> list[str]:
-    allowlist, binary_allowlist, omission_allowlist = _allowlist()
+    allowlist, binary_allowlist, omission_allowlist, _history = _allowlist()
     findings: list[str] = []
     seen_findings: set[str] = set()
     seen_binaries: set[str] = set()
@@ -227,6 +239,57 @@ def scan() -> list[str]:
     return findings
 
 
+def _history_content_findings() -> list[str]:
+    """Match every line any reachable commit added against the identifier patterns.
+
+    A commit is published the moment it exists, so a line that was added and later removed is as
+    disclosed as one still in the tree. The current-tree scan cannot see it; this one reads each
+    commit's own diff. A hit is reported once per commit, path and label, and is suppressed only by
+    an exact `history_findings` entry naming that full commit; an entry that no longer matches is
+    reported as stale. Merge commits show no diff of their own here, so a conflict resolution that
+    introduces text appears under the commit that carries it.
+    """
+    _findings, _binaries, _omissions, allowlist = _allowlist()
+    result = subprocess.run(
+        ["git", "log", "-p", "--format=%x1e%H", "--unified=0", "--no-color", "HEAD"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode:
+        raise ScanError("git log -p failed; commit content could not be audited")
+    findings: list[str] = []
+    seen: set[str] = set()
+    for record in result.stdout.decode("utf-8", errors="replace").split("\x1e"):
+        header, _separator, body = record.partition("\n")
+        commit = header.strip()
+        if not commit:
+            continue
+        path: str | None = None
+        in_hunk = False
+        for line in body.splitlines():
+            if line.startswith("diff --git "):
+                path = None
+                in_hunk = False
+            elif line.startswith("+++ ") and not in_hunk:
+                target = line[4:]
+                path = None if target == "/dev/null" else target.removeprefix("b/")
+            elif line.startswith("@@"):
+                in_hunk = path is not None
+            elif in_hunk and line.startswith("+"):
+                for label, pattern in TEXT_PATTERNS.items():
+                    if pattern.search(line[1:]):
+                        finding = f"{commit}:{path}: {label}"
+                        if finding in seen:
+                            continue
+                        seen.add(finding)
+                        if finding not in allowlist:
+                            findings.append(finding)
+    unused = sorted(allowlist - seen)
+    findings.extend(f"history allowlist entry is stale: {entry}" for entry in unused)
+    return findings
+
+
 def _history_metadata_findings() -> list[str]:
     result = subprocess.run(
         ["git", "log", "HEAD", "--format=%H%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1e"],
@@ -263,6 +326,7 @@ def _history_metadata_findings() -> list[str]:
 def main() -> int:
     try:
         findings = scan()
+        findings.extend(_history_content_findings())
         findings.extend(_history_metadata_findings())
     except ScanError as exc:
         print(f"disclosure scan failed: {exc}", file=sys.stderr)

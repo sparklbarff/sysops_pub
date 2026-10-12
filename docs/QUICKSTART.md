@@ -190,7 +190,8 @@ python tools/test.py
 
 The complete release verifier requires Black, Ruff, gitleaks, and ShellCheck in maintainer mode. It
 also verifies that the tracked local pre-push hook is wired, scans both the current tree and Git
-history with gitleaks, and runs automatically on push:
+history with gitleaks, matches every line any commit added against the disclosure patterns, and
+runs automatically on push:
 
 ```text
 python tools/verify_release.py --require-tools

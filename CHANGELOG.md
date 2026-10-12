@@ -2,6 +2,13 @@
 
 ## 0.11.0 - 2026-10-12
 
+- Scan history content, not only the current tree. The disclosure scan now matches every line any
+  reachable commit added against its identifier patterns, so an identifier that one commit added
+  and a later commit removed still fails the gate; before, only the current tree's content and the
+  history's author and committer identities were checked, and a published-then-removed line was
+  never seen. One hit per commit, path and label; suppressed only by a `history_findings` entry
+  naming the full commit, and a stale entry fails. A test shows the previous scanner reporting
+  clean on exactly that history.
 - Say who the repository is for and what each tool is for. The README names its reader, one
   operator running several agents on one machine, and sorts every tool into run it, copy it, or
   read it. The security boundary gains a threat model, an agent's mistakes rather than a hostile

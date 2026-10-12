@@ -1,6 +1,9 @@
 {
   "schema_version": 3,
   "findings": [],
+  "history_findings": [
+    "e090f5af0ea33293cc70612241e820d9a742103d:tests/test_disclosure_scan.py: Windows user path"
+  ],
   "binary_files": [
     {
       "path": "site/fonts/chivo.woff2",

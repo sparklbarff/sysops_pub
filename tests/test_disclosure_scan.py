@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -196,6 +198,106 @@ class DisclosureScanTests(unittest.TestCase):
                     "samples/synthetic-ledger.json: omission allowlist SHA-256 mismatch",
                     disclosure_scan.scan(),
                 )
+
+    def _history_fixture(self, directory: str) -> tuple[Path, str, str]:
+        """A repository that added an identifier in one commit and removed it in the next."""
+        repository = Path(directory) / "repository"
+        repository.mkdir()
+
+        def git(*arguments: str) -> str:
+            return subprocess.run(
+                ["git", *arguments],
+                cwd=repository,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+
+        git("init", "-q")
+        git("config", "user.email", "123+example-user" + "@" + "users.noreply.github.com")
+        git("config", "user.name", "example-user")
+        git("config", "commit.gpgsign", "false")
+        note = repository / "note.md"
+        note.write_text("contact sample-user" + "@" + "invalid.test\n", encoding="utf-8")
+        git("add", "note.md")
+        git("commit", "-q", "-m", "add an identifier")
+        added = git("rev-parse", "HEAD")
+        note.write_text("contact removed\n", encoding="utf-8")
+        git("add", "note.md")
+        git("commit", "-q", "-m", "remove it again")
+        removed = git("rev-parse", "HEAD")
+        return repository, added, removed
+
+    def _history_findings(self, repository: Path, history: list[str]) -> list[str]:
+        allowlist = repository.parent / "allowlist.json"
+        allowlist.write_text(
+            json.dumps(
+                {
+                    "schema_version": 3,
+                    "findings": [],
+                    "binary_files": [],
+                    "omission_files": [],
+                    "history_findings": history,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            mock.patch.object(disclosure_scan, "ROOT", repository),
+            mock.patch.object(disclosure_scan, "ALLOWLIST_PATH", allowlist),
+        ):
+            return disclosure_scan._history_content_findings()
+
+    def test_history_content_flags_an_identifier_a_later_commit_removed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="disclosure-scan-") as directory:
+            repository, added, removed = self._history_fixture(directory)
+            findings = self._history_findings(repository, [])
+            self.assertEqual(findings, [f"{added}:note.md: email address"])
+            self.assertFalse(any(removed in finding for finding in findings))
+
+    def test_history_allowlist_entry_is_exact_and_goes_stale(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="disclosure-scan-") as directory:
+            repository, added, removed = self._history_fixture(directory)
+            exact = f"{added}:note.md: email address"
+            self.assertEqual(self._history_findings(repository, [exact]), [])
+            stale = f"{removed}:note.md: email address"
+            self.assertEqual(
+                self._history_findings(repository, [stale]),
+                [exact, f"history allowlist entry is stale: {stale}"],
+            )
+
+    def test_main_fails_on_an_identifier_only_the_history_contains(self) -> None:
+        """The current tree is clean and every commit identity is noreply; history alone fails."""
+        with tempfile.TemporaryDirectory(prefix="disclosure-scan-") as directory:
+            repository, added, _removed = self._history_fixture(directory)
+            allowlist = repository.parent / "allowlist.json"
+            allowlist.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 3,
+                        "findings": [],
+                        "binary_files": [],
+                        "omission_files": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(disclosure_scan, "ROOT", repository),
+                mock.patch.object(disclosure_scan, "ALLOWLIST_PATH", allowlist),
+                contextlib.redirect_stderr(stderr),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(disclosure_scan.scan(), [])
+                self.assertEqual(disclosure_scan.main(), 1)
+            self.assertIn(f"{added}:note.md: email address", stderr.getvalue())
+
+    def test_history_allowlist_rejects_abbreviated_commits(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="disclosure-scan-") as directory:
+            repository, added, _removed = self._history_fixture(directory)
+            with self.assertRaisesRegex(disclosure_scan.ScanError, "history_findings"):
+                self._history_findings(repository, [f"{added[:7]}:note.md: email address"])
 
 
 if __name__ == "__main__":

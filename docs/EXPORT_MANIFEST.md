@@ -61,8 +61,11 @@ Before every push:
 
 1. Run `python tools/verify_release.py --require-tools`.
 2. Confirm the tracked-file disclosure scan and both current-tree and Git-history gitleaks scans
-   pass. The disclosure scan also requires GitHub noreply author and committer addresses throughout
-   repository history.
+   pass. The disclosure scan also matches every line any reachable commit added against the same
+   identifier patterns, because a line removed by a later commit is still published, and it
+   requires GitHub noreply author and committer addresses throughout repository history. A
+   historical hit is suppressed only by a `history_findings` entry naming the full commit, path,
+   and label, and an entry that no longer matches fails the scan as stale.
 3. Confirm every tracked symlink remains inside the repository.
 4. Confirm generated reports and demo sandboxes are absent or empty.
 5. Review the complete candidate diff before committing and the complete outgoing commit range
