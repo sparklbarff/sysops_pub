@@ -6,9 +6,10 @@ carries no compatibility promise; see the support section of `README.md`.
 ## Reporting
 
 A defect that could disclose private data, weaken a control, or let a demonstration touch a real
-home directory is a security report. Open an issue on the repository that names the file and the
-behavior without including an exploit, private data, or a path from your own machine. Issues are
-the reporting channel. Private vulnerability reporting on GitHub is not enabled at this revision.
+home directory is a security report. Report it privately through the repository's security
+advisory form on GitHub, which private vulnerability reporting enables, naming the file and the
+behavior. Keep private data and paths from your own machine out of the report. An ordinary issue
+is fine for a defect that discloses nothing.
 
 ## What a report covers
 

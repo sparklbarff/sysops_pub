@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.1 - 2026-10-12
+
+- Name GitHub's private vulnerability reporting as the security channel in `SECURITY.md`, now that
+  it is enabled on the repository. An ordinary issue remains fine for a defect that discloses
+  nothing.
+
 ## 0.11.0 - 2026-10-12
 
 - Make the pre-push gate adoptable and cheaper to retry. The driver demanded this repository's own
