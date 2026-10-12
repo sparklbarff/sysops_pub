@@ -77,7 +77,13 @@ documents the contract and implements neither the queue nor the memory sampler.
 On POSIX, the managed-job example checks its fresh process group after the leading process exits.
 If a child remains, it terminates that owned group and returns an ownership failure instead of
 success. Timeout cleanup also waits for descendants and escalates when a child ignores termination.
-Version-2 receipts state whether the group is terminal. Zombie processes do not count as active work.
+Version-2 receipts state whether the group is terminal.
+
+The probe stays in-process, a null signal to the group, because a sandboxed runtime can refuse to
+spawn a process-listing tool, and a probe that depended on one reported unknown ownership, and so
+failure, on every job run inside the sandbox. A zombie exists until it is reaped, so the runner
+waits briefly for the system to reap what a dead leader left before it concludes; a live child
+outlasts that window and is a leftover.
 
 This is group ownership, not confinement of a child that deliberately creates another session.
 Windows retains leading-process termination only; complete descendant ownership needs a native Job

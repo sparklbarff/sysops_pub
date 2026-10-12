@@ -50,26 +50,45 @@ def _write_receipt(path: Path, value: dict[str, object]) -> None:
     temporary.replace(path)
 
 
+SETTLE_SECONDS = 0.5
+
+
 def _owned_group_active(process_id: int) -> bool | None:
-    """Count live POSIX group members, not merely the leading child or zombies."""
+    """Whether any member of the owned POSIX process group still exists.
+
+    Signal 0 probes the group without delivering anything, so the check stays in-process. A
+    sandboxed runtime can refuse to spawn ps, and a probe that depended on it reported unknown
+    ownership, and so failure, on every job run inside one. A zombie still exists until its parent
+    reaps it, so a caller that needs a terminal verdict polls through _group_terminal rather than
+    trusting one sample.
+    """
     try:
-        result = subprocess.run(
-            ["ps", "-eo", "pgid=,stat="],
-            capture_output=True,
-            text=True,
-            timeout=2,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
+        os.killpg(process_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
         return None
-    if result.returncode:
-        return None
-    return any(
-        len(parts := line.split()) == 2
-        and parts[0] == str(process_id)
-        and not parts[1].startswith("Z")
-        for line in result.stdout.splitlines()
-    )
+    return True
+
+
+def _group_terminal(process_id: int, seconds: float = SETTLE_SECONDS) -> bool | None:
+    """True once the group is empty, False if members remain after the window, None if unknown.
+
+    The window covers children a dead leader left as zombies: the system reparents and reaps them
+    within milliseconds, and a live child outlasts the window and stays a leftover.
+    """
+    deadline = time.monotonic() + seconds
+    while True:
+        active = _owned_group_active(process_id)
+        if active is None:
+            return None
+        if not active:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.02)
 
 
 def _stop_owned_process(process: subprocess.Popen[bytes]) -> bool:
@@ -152,12 +171,12 @@ def run_managed(
             return_code = 130
 
         if os.name == "posix":
-            if _owned_group_active(process.pid) is not False:
+            if _group_terminal(process.pid) is not True:
                 leftover_children = not timed_out and not interrupted
                 termination_attempted = _stop_owned_process(process) or termination_attempted
                 if leftover_children:
                     return_code = OWNERSHIP_RETURN_CODE
-            owned_group_terminal = _owned_group_active(process.pid) is False
+            owned_group_terminal = _group_terminal(process.pid)
             if not owned_group_terminal:
                 return_code = OWNERSHIP_RETURN_CODE
 

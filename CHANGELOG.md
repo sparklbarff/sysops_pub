@@ -2,6 +2,11 @@
 
 ## 0.11.0 - 2026-10-12
 
+- Keep the managed-job ownership probe in-process. It listed the process group through ps, and a
+  sandboxed runtime that refuses to spawn setuid executables made that probe report unknown
+  ownership, and so exit 125, on every job, success included. The probe is now a null signal to
+  the owned group, with a short settle window for children a dead leader left as zombies. A test
+  refuses the subprocess the old probe needed and expects a clean verdict.
 - Scan history content, not only the current tree. The disclosure scan now matches every line any
   reachable commit added against its identifier patterns, so an identifier that one commit added
   and a later commit removed still fails the gate; before, only the current tree's content and the

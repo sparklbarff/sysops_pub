@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -92,6 +93,35 @@ class ManagedJobTests(unittest.TestCase):
                         pass
                 unrelated.terminate()
                 unrelated.wait(timeout=3)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group proof")
+    def test_ownership_verdict_survives_a_sandbox_that_refuses_to_spawn_ps(self) -> None:
+        """A sandboxed runtime can refuse to exec ps; the probe must not depend on it."""
+        with tempfile.TemporaryDirectory(prefix="managed-job-") as directory:
+            receipt = Path(directory) / "sandboxed.json"
+            refused = PermissionError("forbidden-exec-sugid")
+            with mock.patch.object(managed_job.subprocess, "run", side_effect=refused):
+                return_code = managed_job.run_managed(
+                    [sys.executable, "-c", "raise SystemExit(0)"], receipt
+                )
+            self.assertEqual(return_code, 0)
+            value = json.loads(receipt.read_text())
+            self.assertTrue(value["owned_group_terminal"])
+            self.assertFalse(value["leftover_children"])
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group proof")
+    def test_child_that_exited_before_its_leader_is_not_a_leftover(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="managed-job-") as directory:
+            receipt = Path(directory) / "reaped.json"
+            code = (
+                "import subprocess,sys,time; "
+                "subprocess.Popen([sys.executable,'-c','pass']); time.sleep(0.2)"
+            )
+            return_code = managed_job.run_managed([sys.executable, "-c", code], receipt)
+            self.assertEqual(return_code, 0)
+            value = json.loads(receipt.read_text())
+            self.assertFalse(value["leftover_children"])
+            self.assertTrue(value["owned_group_terminal"])
 
     def test_success_is_waited_for_and_receipted(self) -> None:
         with tempfile.TemporaryDirectory(prefix="managed-job-") as directory:
