@@ -31,7 +31,7 @@ private capability or manage a collaborator's live workstation directly.
 | Browser automation | Firefox-only dedicated Playwright MCP registration with matching managed browser build | Generic explicit-browser and MCP-owned-install guidance using Firefox as the example | Sanitized adapter |
 | Agent status cockpit | Live lifecycle hooks publish a sanitized repository label and state to iTerm2 | Optional non-mutating iTerm2 user-variable publisher; lifecycle wiring remains local | macOS optional adapter |
 | macOS management | Homebrew, defaults, Dock, shell, window management, LaunchAgents, themes, privacy, and password-store integration | Lifecycle guidance only; no operating-system mutation command | Design-only by policy |
-| Windows and Linux | Not the private controller's host target | Dependency-free core and the new operations demos are designed for both; native execution evidence is not yet recorded | Design-level compatibility, native proof retained as future work |
+| Windows and Linux | Not the private controller's host target | Dependency-free core and the operations demos are written to run on both; neither has a recorded run, and the Windows settings example is an untested design sketch | Untested; macOS is the only evidenced platform |
 | Workstation diagnostics | Reads real host processes, applications, services, logs, and configuration | No live host diagnostics | Deliberate omission |
 | AI configuration deployment | Reconciles a managed-file set plus hybrid settings | No live home-directory deployment | Deliberate omission |
 | Secrets and recovery | Encrypted private material and password-store operations exist outside the share boundary | Prohibited by the export manifest and disclosure scanner | Deliberate omission |
@@ -49,6 +49,10 @@ private capability or manage a collaborator's live workstation directly.
   execution evidence.
 - **Deliberate omission** means adding the private capability would violate the teaching or disclosure
   boundary.
+
+The adoption status says how faithfully a row mirrors the private system. It does not say whether
+you can run the tool against your own project; that is the use-scope table in `README.md`, which
+sorts every tool into run it, copy it, or read it.
 
 Preserve an existing identity and choose additional roles or workflow gates explicitly. Installing
 policy is not proof that a live session follows it.

@@ -29,7 +29,9 @@ test command before use.
 
 This is a teaching example, not a complete security boundary. Shell commands can write files
 without using `Write` or `Edit`, so a production configuration also needs command controls,
-filesystem permissions, and repository gates.
+filesystem permissions, and repository gates. The guard narrows an agent's mistakes; it is not a
+defense against a hostile agent or against prompt injection, and it runs with the user's own
+privileges.
 
 Read `PLAYWRIGHT.md.example` before enabling browser automation. It requires explicit browser
 selection, an automation-only browser build, and verification of the process actually launched.

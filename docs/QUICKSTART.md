@@ -1,8 +1,8 @@
 # Quick start
 
-This repository is designed for Windows, macOS, and Linux. The primary commands are Python
-programs, so a POSIX shell is optional. Design compatibility is not a claim that every release was
-natively executed on all three operating systems.
+This repository is developed and verified on macOS. The primary commands are Python programs with
+no POSIX shell dependency, so they are written to run on Linux and Windows as well, but neither
+platform has a recorded run, and the Windows commands below are an untested design sketch.
 
 ## Get the repository
 
@@ -151,7 +151,8 @@ or a repository whose evidence spans coding-agent runtimes.
 ## Platform notes
 
 - The Windows Claude Code example uses the native `py -3` launcher and structured hook arguments,
-  avoiding Git Bash and PowerShell quoting differences.
+  avoiding Git Bash and PowerShell quoting differences. It is an untested design sketch: no Windows
+  run of it has been recorded.
 - macOS and Linux examples use `python3`.
 - The Codex examples contain reviewed sandbox and approval keys plus a separate named, read-only
   profile. Disabling multi-agent tools remains a separate optional example.
@@ -167,16 +168,17 @@ or a repository whose evidence spans coding-agent runtimes.
 |---|---|---|---|
 | Dependency-free Python design | Reviewed | Reviewed | Reviewed |
 | Claude and Codex adapter design | Reviewed | Reviewed | Reviewed |
-| Native core-suite execution | Python 3.11, 3.12, and 3.14 | Not recorded | Not recorded |
-| Native full release verification | Recorded on 2026-09-01 | Not recorded | Not recorded |
+| Native core-suite execution | Python 3.11, 3.12, and 3.14 | Untested | Untested |
+| Native full release verification | Recorded on 2026-09-01 | Untested | Untested |
 
 Python 3.13 was unavailable in the audit environment; that is missing evidence, not a failed run.
-Design-level compatibility is the current Windows and Linux acceptance target.
+macOS is the only platform with recorded evidence. Linux and Windows are untested and claimed only
+as design intent; the Windows settings example is a design sketch.
 
-Native Windows and Linux evidence remains wanted. Record it only from a real native run of the
-exact commit, including the platform, Python version, test command, exit status, and commit SHA.
-Do not substitute a container, compatibility layer, or hosted CI badge without labeling that
-different execution environment.
+If Linux or Windows evidence is ever recorded, record it only from a real native run of the exact
+commit, including the platform, Python version, test command, exit status, and commit SHA. Do not
+substitute a container, compatibility layer, or hosted CI badge without labeling that different
+execution environment.
 
 ## Maintainer verification
 

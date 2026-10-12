@@ -10,7 +10,16 @@ For Codex:
 - Use `workspace-write` or a stricter native sandbox as the durable write boundary.
 - Keep approvals enabled for operations that leave the sandbox or alter external state.
 - Use repository validators and Git hooks for acceptance evidence.
-- Treat lifecycle context hooks as advisory unless the runtime documents a durable block contract.
+- Codex documents lifecycle hooks that can block: a `PreToolUse` hook denies a tool call with a
+  deny decision or exit 2, configured in a hooks file or an inline hooks table in the config.
+  Treat any hook event the runtime documents as advisory only as advisory.
+
+Hook trust is the human's. Codex records trust against each hook's hash, and a new or changed hook
+is skipped until the human trusts it again. As observed on a current release, the record is also
+keyed to the handler's position in its group: inserting a handler ahead of a trusted one shifts the
+trusted handlers, every shifted handler stops running until re-trusted, and under non-interactive
+execution nothing reports it. Append new handlers after trusted ones, never insert ahead of them,
+re-trust after every change, and never let an installer write trust entries.
 
 `config.toml.example` contains the sandbox and approval baseline, a quieter display preference, and
 explicit analytics opt-out. These do not lower model effort or impose an answer-verbosity limit.

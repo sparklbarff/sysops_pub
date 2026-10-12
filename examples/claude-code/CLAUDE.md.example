@@ -45,3 +45,15 @@ user explicitly authorizes a broader operation.
 
 Run the repository's documented local checks before claiming completion. For every blocking
 control, retain executable tests that prove both a rejected bad input and an admitted good input.
+
+## Enforcement classes
+
+Every rule above belongs to one of three classes. A rule that cannot be gated is still a rule.
+
+- Hook-gated: the Artifact tool is denied in the project settings, and a write outside the project
+  root is blocked by the scope guard on PreToolUse. Both carry a block-and-admit test.
+- Audited: none in this starter. An audit reads a transcript after the fact and finds only what its
+  parser can parse.
+- Instruction-only: everything else. A claim made in a reply, a hedged recommendation, a remark on
+  the user's hours, or a publication through a path no tool name matches is response text, and no
+  hook sees it. Those rules are on the agent.

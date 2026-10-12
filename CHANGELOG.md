@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.11.0 - 2026-10-12
+
+- Say who the repository is for and what each tool is for. The README names its reader, one
+  operator running several agents on one machine, and sorts every tool into run it, copy it, or
+  read it. The security boundary gains a threat model, an agent's mistakes rather than a hostile
+  model, and an operating scope, one operator and one machine. A support statement and
+  `SECURITY.md` say the repository is unsupported and how to report a defect. Both instruction
+  starters end with their enforcement classes: hook-gated or sandbox-gated, audited, and
+  instruction-only.
+- Narrow the platform claim to what is evidenced. macOS is the only platform with a recorded run;
+  Linux and Windows are untested, and the Windows settings example is an untested design sketch.
+- Carry three operating lessons into the design-only sections without figures: charge measured
+  use rather than declarations and batch benchmarks; a new interpreter is a migration, not an
+  update; tolerate an application-written configuration entry only while it stays disabled. The
+  architecture chapter adds the authority rule, that a peer's request is a work order against the
+  operator's machine, learned from an audit loop between agents. The Codex integration notes
+  record that its hooks can block and that hook trust is positional and the human's to grant.
+
 ## 0.10.1 - 2026-10-10
 
 - Fix the pre-push gate to verify every commit a push publishes, not only the tip of each ref. It

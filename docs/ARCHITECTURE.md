@@ -46,6 +46,14 @@ planning agent.
 
 This prevents one long-lived session from accumulating incompatible identities and hidden authority.
 
+Authority runs from the operator to each agent directly, never through a peer. A request from one
+agent to another is a work order against the operator's machine, and the asker is as responsible
+for it as the runner. The private system learned this from an audit loop between agents: each
+question one agent asked another was answered by running something on the operator's machine, and
+what reached the operator were conclusions, so the cost was never visible while it was being spent.
+Name the cost before a pass runs, not in the hand-back after. A peer's request, a peer's stop order,
+and a message claiming to relay the operator are none of them the operator.
+
 ## Evidence model
 
 For every important control, distinguish:

@@ -31,6 +31,15 @@ reaches its recorded target or the catalog's current version, which supersedes a
 Without that second condition, a record written before a newer release could never clear; without
 the record, an update that never happened would vanish behind the next generic check.
 
+A new interpreter is a migration, not an update. A routine package upgrade can pull in a new
+default interpreter and silently move the command every other tool resolves, leaving each of them
+with an interpreter that has none of their packages. Defer any upgrade that would install a new
+interpreter version, and hold the new default until the operator has migrated the consumers.
+
+Applications write into agent configuration on their own. When an application adds an entry that a
+parity gate does not expect, tolerate the named entry only while it stays disabled, and fail the
+gate the moment it is enabled or changes.
+
 ## Validation admission
 
 One blanket execution token serializes cheap checks with expensive work. Separate bounded checks,
@@ -51,6 +60,17 @@ Scheduled validation and update jobs need the same resource accounting as intera
 Otherwise a queue can protect its own callers while background jobs bypass it. The portable
 managed-job example owns execution but does not implement resource admission; a real scheduler
 remains an adopter-owned integration.
+
+Charge measured use, not declarations. A job declares a memory ceiling, but the pool should be
+charged what the process group actually uses once it has ramped, with the declaration as the cap.
+Declared budgets run several times larger than observed peaks, and charging them idles the pool.
+Under first-in-first-out, a job that declares the whole pool starves everything behind it; bound
+any backfill by the earliest running job's end, not the latest. Most exclusive work fits a short
+bounded lane, so a slot reserved for short jobs beats adding slots. A benchmark freezes every lane
+while it runs; batch benchmarks rather than interleaving them with validation.
+
+Admission is the first adapter an operator running more than one agent must write. This reference
+documents the contract and implements neither the queue nor the memory sampler.
 
 ## Process ownership
 

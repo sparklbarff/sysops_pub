@@ -9,6 +9,13 @@ private `sysops` system it mirrors is never exported: this repository has its ow
 synthetic fixtures, and no credentials, paths, memories, or host configuration. What it keeps is the
 shape of the system and the discipline behind it.
 
+## Who it is for
+
+One operator running several coding agents on one machine, across Claude Code and Codex, who wants
+controls that are tested rather than asserted. It is not a drop-in rules pack and not a product.
+Read the architecture, run the demo, then take one tier at a time from the use-scope table below:
+run the tools that work as-is, copy the patterns, and read the demonstrations.
+
 ## What it demonstrates
 
 - A declare-then-verify control loop that never trusts its own apply step.
@@ -44,7 +51,9 @@ drift and status report
 ## Quick start
 
 Requirements: Python 3.11 or newer. No third-party Python packages and no POSIX shell are needed for
-the tour or the core tests. Use `python3` on macOS or Linux and `py -3` on Windows.
+the tour or the core tests. It is developed and verified on macOS. The Python-only design is written
+to run on Linux and Windows too, but neither is tested, and the Windows commands in the quick start
+guide are an untested design sketch.
 
 ```text
 git clone https://github.com/sparklbarff/sysops_pub.git
@@ -56,8 +65,8 @@ python3 tools/test.py      # the dependency-free test suite
 The demo builds a temporary marked sandbox, exercises the whole loop against it, and removes it on
 exit. It does not write to your home directory or change any operating-system setting.
 
-See `docs/QUICKSTART.md` for the Windows commands, the adoption-bundle builder, the supervised-update
-and managed-job exercises, and the cross-platform evidence matrix.
+See `docs/QUICKSTART.md` for the adoption-bundle builder, the supervised-update and managed-job
+exercises, the untested Windows commands, and the platform evidence table.
 
 ## Adopt it
 
@@ -94,12 +103,30 @@ walks through adding a component, adopting the agent policy, and adopting retrie
 - `tools/build_site.py`, `site/`: the reference-manual website, generated from these documents and
   from each tool's own argument parser; the build writes to the ignored `_site/`.
 
+## Use scope
+
+Not every tool here is meant to run against your project. Three tiers:
+
+| Tier | Tools | What it means |
+|---|---|---|
+| Run it | `tools/managed_job.py`, `tools/calibrate_check.py` | Usable as-is from this checkout against any project today |
+| Copy it | `tools/pre_push.py` with `tools/bootstrap.py` and `tools/verify_release.py`; `examples/enforcement/scope_guard.py` with the settings and instruction starters; `scripts/disclosure_scan.py` | Patterns to copy into your project and edit: the gate expects this repository's verifier, the guard covers one hook event, and the scanner is rooted here |
+| Read it | `tools/control.py`, `tools/demo.py`, `tools/update_supervisor.py`, `tools/search_docs.py`, `tools/eval_retrieval.py`, `tools/plan_index_refresh.py`, `tools/case_exercises.py`, `examples/enforcement/grounding_classifier.py`, `examples/macos/iterm_agent_status.py` | Demonstrations of a contract over sandboxes or synthetic inputs; the retrieval tools accept your own corpus but rank by token overlap |
+
+`tools/adopt.py`, `tools/test.py` and `tools/build_site.py` are this repository's own installer,
+suite runner and manual generator.
+
 ## Safety model
 
 The demo controller refuses to initialize `/`, this repository, the current directory, or a real
 home; writes only inside a directory carrying its sandbox marker; rejects absolute and
 parent-traversing registry paths and managed symlinks; previews by default and requires `--execute`
 to write; and reports unmanaged files without ever deleting them.
+
+What the harness defends against is an agent's mistake: a write outside its scope, a publication
+nobody authorized, a commit that reached a public history unverified, a process left running, or a
+claim made without evidence. It does not resist a hostile model, a prompt injection, or a user
+working around it, and it does not replace filesystem permissions or a sandbox.
 
 Read `docs/SECURITY_BOUNDARY.md` before adapting any component to a real machine.
 
@@ -118,6 +145,15 @@ implementation.
 The private system's local retrieval runs on a FAISS index and an Ollama model pipeline; this
 reference reimplements the same retrieval contract over a synthetic corpus with no model or index
 dependency, so the engine itself is not bundled (see the capability matrix).
+
+## Support and versioning
+
+This repository is unsupported. There is no compatibility promise: command-line flags, receipt
+schemas and starter contents can change between the revisions listed in `CHANGELOG.md`. The one
+guarantee is the release gate's: every published commit passed its own suite, disclosure scan and
+secret scans. Issues are read; pull requests are not solicited. A defect that could disclose private
+data or weaken a control is reported as described in `SECURITY.md`. It is built and verified by one
+operator on macOS.
 
 ## License
 

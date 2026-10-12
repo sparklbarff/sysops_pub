@@ -13,7 +13,26 @@ treated as already published the moment it is committed.
 - No tracked script requires elevated privileges.
 - No default command changes the host operating system.
 - Claude Code hooks are advisory or narrowly scoped examples.
-- Codex safety relies primarily on its sandbox and approval policy, not an imitation hook layer.
+- Codex safety relies primarily on its sandbox and approval policy. Its hooks can block, but trust
+  in each hook is granted by the human, never written by an installer.
+
+## Threat model
+
+The controls here defend against an agent's mistakes: a write outside the project, a publication
+nobody authorized, a commit that reaches public history without its own verification, a process
+left running after its leader exits, and a claim of success without evidence. They assume a model
+that follows instructions imperfectly, not one that works against them.
+
+They do not resist a hostile model, prompt injection carried in repository content, or a user who
+routes around a hook. A shell command can still write a file the path guard never sees, and a hook
+runs with the user's own privileges. Filesystem permissions, the runtime's sandbox, and the
+repository gate remain the boundary; the hooks narrow the room for error inside it.
+
+## Operating scope
+
+One operator, one machine, several agents across two runtimes. Nothing here addresses two people
+sharing an adopted project, shared credentials, or a hosted service. The pre-push gate is per clone,
+and each clone installs it for itself.
 
 ## Adaptation boundary
 
