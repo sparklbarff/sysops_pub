@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agent-tools/scope_guard.py\" --codex-hook",
+            "statusMessage": "Scope guard"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.agent-tools/command_guard.py\" --codex-hook",
+            "statusMessage": "Command guard"
+          }
+        ]
+      }
+    ]
+  }
+}

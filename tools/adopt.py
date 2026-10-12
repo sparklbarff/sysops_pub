@@ -95,6 +95,18 @@ def _sources(tool: str, platform: str) -> list[tuple[Path, Path]]:
                     REPO_ROOT / "examples" / "codex" / "review.config.toml.example",
                     Path("codex/review.config.toml.example"),
                 ),
+                (
+                    REPO_ROOT / "examples" / "codex" / "hooks.json.example",
+                    Path("codex/.codex/hooks.json"),
+                ),
+                (
+                    REPO_ROOT / "examples" / "enforcement" / "scope_guard.py",
+                    Path("codex/.agent-tools/scope_guard.py"),
+                ),
+                (
+                    REPO_ROOT / "examples" / "enforcement" / "command_guard.py",
+                    Path("codex/.agent-tools/command_guard.py"),
+                ),
             ]
         )
     return selected
@@ -192,8 +204,25 @@ def _install_targets(tool: str, platform: str) -> list[tuple[Path, Path]]:
             ]
         )
     if tool in {"codex", "both"}:
-        selected.append((examples / "codex" / "AGENTS.md.example", Path("AGENTS.md")))
-    return selected
+        selected.extend(
+            [
+                (examples / "codex" / "AGENTS.md.example", Path("AGENTS.md")),
+                (examples / "codex" / "hooks.json.example", Path(".codex/hooks.json")),
+                (
+                    examples / "enforcement" / "scope_guard.py",
+                    Path(".agent-tools/scope_guard.py"),
+                ),
+                (
+                    examples / "enforcement" / "command_guard.py",
+                    Path(".agent-tools/command_guard.py"),
+                ),
+            ]
+        )
+    # Both tools share the guards; place each project path once, in first-seen order.
+    unique: dict[Path, Path] = {}
+    for source, relative in selected:
+        unique.setdefault(relative, source)
+    return [(source, relative) for relative, source in unique.items()]
 
 
 def _merge_settings(existing: dict, addition: dict) -> tuple[dict, bool]:

@@ -155,7 +155,10 @@ or a repository whose evidence spans coding-agent runtimes.
   run of it has been recorded.
 - macOS and Linux examples use `python3`.
 - The Codex examples contain reviewed sandbox and approval keys plus a separate named, read-only
-  profile. Disabling multi-agent tools remains a separate optional example.
+  profile. Disabling multi-agent tools remains a separate optional example. The Codex hooks file
+  wires the scope guard and the command guard; after installing it, trust each handler yourself in
+  the CLI's hooks browser, and append new handlers after trusted ones rather than inserting ahead
+  of them, because trust is keyed to a handler's position.
 - The Claude settings examples mechanically deny the named Artifact publication tool. Project
   instructions carry the broader no-upload rule.
 - Browser automation guidance selects a dedicated browser explicitly and uses the MCP package's own

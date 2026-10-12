@@ -2,6 +2,15 @@
 
 ## 0.11.0 - 2026-10-12
 
+- Wire the guards for Codex. Codex documents hooks that can block, so the scope guard gains a
+  Codex mode that reads every file an `apply_patch` payload names from the patch header and
+  requires all of them to stay under the session's working directory, and a project hooks file
+  wires it on `apply_patch` and the command guard on `Bash`, resolving the guard's path from the
+  Git root. The adoption tool places the hooks file and the guards for Codex projects, once when
+  both tools are selected. A test runs the adopted commands through a real shell. Trust stays the
+  human's: the notes record that Codex keys hook trust to a handler's position as well as its hash,
+  so a handler inserted ahead of a trusted one silently stops every shifted handler, and the rule is
+  to append, re-trust after every change, and never let an installer write trust entries.
 - Add a command guard and a read guard, and wire both in the Claude Code settings starters beside
   the scope guard. The command guard judges a Bash command or a WebFetch URL by parsed structure
   and blocks five classes: credential reads including the keychain, credential and configuration

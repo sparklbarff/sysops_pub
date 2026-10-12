@@ -112,6 +112,75 @@ class ScopeGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("invalid hook JSON", result.stderr)
 
+    def run_codex_hook(self, payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
+        script = ROOT / "examples" / "enforcement" / "scope_guard.py"
+        return subprocess.run(
+            [sys.executable, str(script), "--codex-hook"],
+            input=json.dumps(payload),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    @staticmethod
+    def _patch(*headers: str) -> str:
+        body = "\n".join(headers)
+        return f"*** Begin Patch\n{body}\n@@\n-old\n+new\n*** End Patch\n"
+
+    def test_codex_hook_judges_every_file_an_apply_patch_names(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="scope-guard-codex-") as directory:
+            root = Path(directory) / "project"
+            root.mkdir()
+            admitted = self.run_codex_hook(
+                {
+                    "cwd": str(root),
+                    "tool_name": "apply_patch",
+                    "tool_input": {
+                        "command": self._patch(
+                            "*** Update File: docs/inside.md",
+                            "*** Add File: new.md",
+                            "*** Move to: renamed.md",
+                        )
+                    },
+                }
+            )
+            blocked = self.run_codex_hook(
+                {
+                    "cwd": str(root),
+                    "tool_name": "apply_patch",
+                    "tool_input": {
+                        "command": self._patch(
+                            "*** Update File: docs/inside.md", "*** Add File: ../outside.md"
+                        )
+                    },
+                }
+            )
+        self.assertEqual(admitted.returncode, 0, admitted.stderr)
+        self.assertIn("ALLOWED", admitted.stdout)
+        self.assertEqual(blocked.returncode, 2, blocked.stdout)
+        self.assertIn("outside the project root", blocked.stderr)
+        self.assertIn("outside.md", blocked.stderr)
+
+    def test_codex_hook_fails_closed_without_paths_or_cwd(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="scope-guard-codex-") as directory:
+            no_paths = self.run_codex_hook(
+                {
+                    "cwd": directory,
+                    "tool_name": "apply_patch",
+                    "tool_input": {"command": "*** Begin Patch\n*** End Patch\n"},
+                }
+            )
+            no_cwd = self.run_codex_hook(
+                {
+                    "tool_name": "apply_patch",
+                    "tool_input": {"command": self._patch("*** Update File: a.md")},
+                }
+            )
+        self.assertEqual(no_paths.returncode, 2, no_paths.stdout)
+        self.assertIn("no supported write path", no_paths.stderr)
+        self.assertEqual(no_cwd.returncode, 2, no_cwd.stdout)
+        self.assertIn("cwd is required", no_cwd.stderr)
+
     def test_hook_process_fails_closed_on_path_resolution_error(self) -> None:
         script = ROOT / "examples" / "enforcement" / "scope_guard.py"
         with tempfile.TemporaryDirectory(prefix="scope-guard-hook-") as directory:
