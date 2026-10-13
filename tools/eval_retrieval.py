@@ -43,13 +43,26 @@ def _context_text(receipt: dict[str, object], corpus: Path) -> str:
     Resolve each cited source back to its bytes so a verdict is judged against the context the model
     would see, not the filename. Judging by filename manufactures hits: the right document can be
     retrieved while the window shown never contains the answer.
+
+    The citation is resolved against the base the retriever used: the repository for a corpus inside
+    it, the corpus itself for one outside. Trying the repository first would judge an external
+    corpus's README.md against this repository's README.md. A citation that resolves outside the
+    evaluated corpus is an error, not a guess.
     """
+    corpus = corpus.resolve()
+    try:
+        corpus.relative_to(REPO_ROOT)
+    except ValueError:
+        base = corpus
+    else:
+        base = REPO_ROOT
     parts: list[str] = []
     for source in receipt["sources"]:  # type: ignore[union-attr]
-        rel = str(source["path"])
-        path = REPO_ROOT / rel
-        if not path.is_file():
-            path = corpus / Path(rel).name
+        path = (base / str(source["path"])).resolve()
+        try:
+            path.relative_to(corpus)
+        except ValueError as exc:
+            raise ValueError(f"cited source is outside the evaluated corpus: {path}") from exc
         parts.append(path.read_text(encoding="utf-8"))
     return "\n".join(parts).lower()
 

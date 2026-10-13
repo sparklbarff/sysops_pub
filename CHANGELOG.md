@@ -28,6 +28,12 @@ Repairs for the remaining public findings of the same joint audit, each reproduc
   contract; it now reports a satisfied entry and leaves the record for the next apply. Tests run the
   collateral failure through a later check, a repair and an apply, and require check to leave the
   record's bytes and timestamp unchanged; the previous updater fails each.
+- Judge an external corpus against its own files. The evaluator resolved each cited path against
+  this repository first and fell back to the corpus only when no such repository file existed, so
+  an external corpus's `README.md` was judged as this repository's `README.md`. Citations now
+  resolve against the base the retriever used, and one that resolves outside the evaluated corpus
+  is an error. A test with a colliding `README.md` gets both verdicts right; the previous evaluator
+  inverts both.
 
 ## 0.11.2 - 2026-10-13
 

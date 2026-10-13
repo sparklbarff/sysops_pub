@@ -58,7 +58,9 @@ The discipline it demonstrates:
   window omits the answer is a miss. In the real system a person makes that call, because a
   relevance score or a keyword match cannot tell an answer from a mere mention. The answer token in
   `eval-questions.json` is that human verdict frozen so the demo runs reproducibly, not a claim the
-  verdict can be automated.
+  verdict can be automated. The judged text is the cited file in the corpus that was evaluated,
+  resolved against the same base the retriever used, so an external corpus's `README.md` is never
+  judged as this repository's.
 - Three cohorts, scored differently. `curated-in-corpus` answers genuinely live in the corpus, so a
   miss is a real recall failure and these are the primary metric. `coverage-gap` answers live only
   outside the indexed surface, so a miss is a coverage limitation tracked off the headline rather

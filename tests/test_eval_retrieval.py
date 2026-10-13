@@ -70,6 +70,41 @@ class EvalRetrievalTests(unittest.TestCase):
             report = eval_retrieval.evaluate(path, ROOT / "samples" / "rag" / "corpus")
             self.assertEqual(report["curated_recall"], {"hit": 0, "total": 1})
 
+    def test_an_external_corpus_is_judged_against_its_own_bytes(self) -> None:
+        # The external corpus has a README.md too. Its verdicts must come from that file, never from
+        # this repository's README.md, which carries different words.
+        with tempfile.TemporaryDirectory(prefix="rag-eval-") as directory:
+            corpus = Path(directory) / "corpus"
+            corpus.mkdir()
+            (corpus / "README.md").write_text(
+                "# Field notes\n\nThe zebrafinch notes live here.\n", encoding="utf-8"
+            )
+            repository_only = "sanitized"
+            self.assertIn(repository_only, (ROOT / "README.md").read_text(encoding="utf-8"))
+            spec = {
+                "schema_version": 1,
+                "retriever_id": search_docs.RETRIEVER_ID,
+                "questions": [
+                    {
+                        "id": "external-answer",
+                        "prompt": "where are the zebrafinch notes",
+                        "cohort": "curated-in-corpus",
+                        "answer_token": "zebrafinch",
+                    },
+                    {
+                        "id": "repository-word",
+                        "prompt": "where are the zebrafinch notes",
+                        "cohort": "curated-in-corpus",
+                        "answer_token": repository_only,
+                    },
+                ],
+            }
+            path = Path(directory) / "q.json"
+            path.write_text(json.dumps(spec), encoding="utf-8")
+            report = eval_retrieval.evaluate(path, corpus)
+            verdicts = {result["id"]: result["verdict"] for result in report["results"]}
+            self.assertEqual(verdicts, {"external-answer": "hit", "repository-word": "miss"})
+
 
 if __name__ == "__main__":
     unittest.main()
