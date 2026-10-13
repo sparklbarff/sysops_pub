@@ -149,10 +149,18 @@ dependency, so the engine itself is not bundled (see the capability matrix).
 ## Support and versioning
 
 This repository is unsupported. There is no compatibility promise: command-line flags, receipt
-schemas and starter contents can change between the revisions listed in `CHANGELOG.md`. The one
-guarantee is the release gate's: every published commit passed its own suite, disclosure scan and
-secret scans. Issues are read; pull requests are not solicited. A defect that could disclose private
-data or weaken a control is reported as described in `SECURITY.md`. It is built and verified by one
+schemas and starter contents can change between the revisions listed in `CHANGELOG.md`.
+
+What the release gate enforces is a policy for each push, not a certificate for the whole history.
+Since 0.10.1 the pre-push hook verifies every commit a push publishes, each from its own tree;
+since 0.11.2 that range is bound to the push destination, and a pass recorded for one commit is
+never reused for another. Before 0.10.1 the hook verified only each ref's tip, and one intermediate
+commit, `1541a09`, was published without its own check, as the 0.10.1 changelog entry records.
+The gate's evidence is its output at each push and, for the live manual, the verdict the release
+build prints on the `verify_release` page.
+
+Issues are read; pull requests are not solicited. A defect that could disclose private data or
+weaken a control is reported as described in `SECURITY.md`. It is built and verified by one
 operator on macOS.
 
 ## License

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.3 - 2026-10-13
+
+Repairs for the remaining public findings of the same joint audit, each reproduced first.
+
+- State what the release gate enforces instead of a guarantee it never earned. The README said
+  every published commit passed its own suite; one commit, `1541a09`, went out unchecked before
+  0.10.1, and the range and memo were not bound to the destination and commit until 0.11.2. It now
+  states the per-push policy, the version each part dates from, and the known exception.
+
 ## 0.11.2 - 2026-10-13
 
 Three identity defects in the release gate, found in a joint audit and reproduced before repair.
