@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.11.2 - 2026-10-13
+
+Three identity defects in the release gate, found in a joint audit and reproduced before repair.
+Each new test fails on the previous code.
+
+- Verify every commit the push destination does not have. The driver excluded every
+  remote-tracking ref, and the hook never passed Git's destination, so a commit some other remote
+  already had was never verified on its way to this one. The hook now passes the destination's name
+  and location, the driver refuses to run without them, and only the destination's own
+  remote-tracking refs and the ref's current value bound the range; a push to a bare location
+  excludes only the ref's value.
+- Key the verified-gate memo by the subject the gate judged. 0.11.0 keyed it by tree, so a
+  different commit with the same files, an amended author for instance, reused a pass from a gate
+  that reads commit identity and history. The memo is now keyed by commit identity. A gate that
+  reads only the files may declare `memo = "tree"` and is still reused across commits with
+  identical files; a gate that receives `{commit}` cannot declare it, and an unknown scope refuses
+  the push. The memo file is renamed, so entries keyed the old way are no longer consulted.
+- Scan the text a merge adds. The history scan read no merge diffs, so text added only in a merge
+  commit and removed later was never seen, and the scanner's own description said otherwise. It
+  now reads merges as combined diffs and reports only lines present in no parent, under the merge;
+  lines a parent carried stay reported under the commit that added them, not twice.
+
 ## 0.11.1 - 2026-10-12
 
 - Name GitHub's private vulnerability reporting as the security channel in `SECURITY.md`, now that

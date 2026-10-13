@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """Verify every outgoing Git commit in an isolated worktree with the gate that commit declares.
 
-Git's pre-push protocol names each ref's local and remote object IDs on stdin. Every commit the push
-would publish is listed, oldest first, and each is checked out detached into a temporary worktree
-and verified there with its own gate: the command its pyproject.toml declares under
+Git runs the pre-push hook with the destination remote's name and location as arguments and names
+each ref's local and remote object IDs on stdin. Every commit the push would publish to that
+destination is listed, oldest first: a commit is excluded only when the destination already has it,
+by the ref's current value there or the destination's own remote-tracking refs, never because some
+other remote has it. Each listed commit is checked out detached into a temporary worktree and
+verified there with its own gate: the command its pyproject.toml declares under
 [tool.sysops_pub.gate], with {commit} replaced by the commit's identity. Without a declaration the
-gate is tools/verify_release.py --require-tools, this repository's own. A tree this clone has
-already verified with the same command is not verified again; that memo lives inside .git, is never
-tracked, records the tree and the command but not the tools' versions, and deleting it forces a
-full re-verification.
+gate is tools/verify_release.py --require-tools, this repository's own.
+
+A commit this clone has already verified with the same command is not verified again. The memo is
+keyed by commit identity, because a gate can read history and metadata a tree does not carry; a gate
+that reads only the files may declare memo = "tree" to be reused across commits with the same tree,
+and a gate that receives {commit} cannot. The memo lives inside .git, is never tracked, does not
+record the tools' versions, and deleting it forces a full re-verification.
 """
 
 from __future__ import annotations
@@ -34,7 +40,8 @@ DEFAULT_GATE = (
     "--candidate-sha",
     "{commit}",
 )
-MEMO_NAME = "sysops-pub-verified-trees"
+MEMO_NAME = "sysops-pub-verified-gates"
+MEMO_SCOPES = ("commit", "tree")
 
 
 class PrePushError(RuntimeError):
@@ -77,16 +84,25 @@ def _git(*arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def outgoing_commits(refs: Iterable[tuple[str, str]]) -> list[str]:
-    """Every commit the push would publish, oldest first, not only each ref's tip.
+def _is_configured_remote(name: str) -> bool:
+    listed = _git("remote")
+    return listed.returncode == 0 and name in listed.stdout.split()
 
-    A commit is outgoing when it is reachable from the pushed object and from neither the remote
-    ref's current value nor any remote-tracking ref. A remote value this clone has never fetched
-    cannot bound the range, so the push is refused rather than verified on a guess.
+
+def outgoing_commits(refs: Iterable[tuple[str, str]], destination: str) -> list[str]:
+    """Every commit the push would publish to the destination, oldest first, not only each tip.
+
+    A commit is outgoing when it is reachable from the pushed object and the destination does not
+    already have it: neither the remote ref's current value nor, when the destination is a named
+    remote, any of that remote's own remote-tracking refs reaches it. Another remote having the
+    commit says nothing about this destination, so other remotes never exclude anything. A push to
+    a bare location excludes only the ref's current value. A remote value this clone has never
+    fetched cannot bound the range, so the push is refused rather than verified on a guess.
     """
     commits: list[str] = []
+    tracking = [f"--remotes={destination}"] if _is_configured_remote(destination) else []
     for local_sha, remote_sha in refs:
-        excluded = ["--remotes"]
+        excluded = list(tracking)
         if not _is_null_sha(remote_sha):
             known = _git("cat-file", "-e", f"{remote_sha}^{{commit}}")
             if known.returncode:
@@ -104,11 +120,15 @@ def outgoing_commits(refs: Iterable[tuple[str, str]]) -> list[str]:
     return commits
 
 
-def gate_command(commit_sha: str) -> list[str]:
-    """The verifier the commit declares in its own pyproject.toml, or this repository's default."""
+def gate_declaration(commit_sha: str) -> tuple[list[str], str]:
+    """The verifier and memo scope the commit declares in its pyproject.toml, or the defaults.
+
+    The scope defaults to "commit". A gate may declare "tree" only when it reads nothing but the
+    files; one that receives {commit} is judging the commit itself and cannot.
+    """
     shown = _git("show", f"{commit_sha}:pyproject.toml")
     if shown.returncode:
-        return list(DEFAULT_GATE)
+        return list(DEFAULT_GATE), "commit"
     try:
         data: object = tomllib.loads(shown.stdout)
     except tomllib.TOMLDecodeError as exc:
@@ -117,7 +137,7 @@ def gate_command(commit_sha: str) -> list[str]:
     for key in GATE_TABLE:
         table = table.get(key) if isinstance(table, dict) else None
     if table is None:
-        return list(DEFAULT_GATE)
+        return list(DEFAULT_GATE), "commit"
     command = table.get("command") if isinstance(table, dict) else None
     if (
         not isinstance(command, list)
@@ -127,7 +147,17 @@ def gate_command(commit_sha: str) -> list[str]:
         raise PrePushError(
             f"[tool.sysops_pub.gate] command in {commit_sha} must be a non-empty list of strings"
         )
-    return list(command)
+    scope = table.get("memo", "commit") if isinstance(table, dict) else "commit"
+    if scope not in MEMO_SCOPES:
+        raise PrePushError(
+            f"[tool.sysops_pub.gate] memo in {commit_sha} must be one of: " + ", ".join(MEMO_SCOPES)
+        )
+    if scope == "tree" and any("{commit}" in item for item in command):
+        raise PrePushError(
+            f"[tool.sysops_pub.gate] in {commit_sha}: a gate that receives {{commit}} "
+            'cannot declare memo = "tree"'
+        )
+    return list(command), scope
 
 
 def _resolved_gate(command: Sequence[str], commit_sha: str) -> list[str]:
@@ -147,13 +177,22 @@ def _memo_path() -> Path | None:
     return directory / MEMO_NAME
 
 
-def memo_key(commit_sha: str, command: Sequence[str]) -> str:
-    """The tree a commit carries and the command that verified it; history is not part of it."""
+def memo_key(commit_sha: str, command: Sequence[str], scope: str = "commit") -> str:
+    """The subject the gate judged and the command that judged it.
+
+    The subject is the commit itself unless the gate declared that it reads only the tree. A tree
+    key for a gate that also reads history or metadata would let a different commit with the same
+    files reuse a pass it never earned.
+    """
+    if scope not in MEMO_SCOPES:
+        raise PrePushError(f"unknown memo scope: {scope}")
+    digest = hashlib.sha256(json.dumps(list(command)).encode("utf-8")).hexdigest()
+    if scope == "commit":
+        return f"commit {commit_sha} {digest}"
     tree = _git("rev-parse", f"{commit_sha}^{{tree}}")
     if tree.returncode:
         raise PrePushError(f"cannot resolve the tree of {commit_sha}")
-    digest = hashlib.sha256(json.dumps(list(command)).encode("utf-8")).hexdigest()
-    return f"{tree.stdout.strip()} {digest}"
+    return f"tree {tree.stdout.strip()} {digest}"
 
 
 def _already_verified(key: str) -> bool:
@@ -174,20 +213,21 @@ def _remember(key: str) -> None:
         with memo.open("a", encoding="utf-8") as handle:
             handle.write(key + "\n")
     except OSError as exc:
-        print(f"pre-push: warning: could not record the verified tree: {exc}", file=sys.stderr)
+        print(f"pre-push: warning: could not record the verification: {exc}", file=sys.stderr)
 
 
 def verify_outgoing_sha(sha: str) -> bool:
-    """Run the commit's declared gate from its exact tree; False when the tree was already verified."""
+    """Run the commit's declared gate from its exact tree; False when the memo already holds it."""
     resolved = _git("rev-parse", "--verify", f"{sha}^{{commit}}")
     if resolved.returncode:
         detail = resolved.stderr.strip() or f"git rev-parse returned {resolved.returncode}"
         raise PrePushError(f"cannot resolve outgoing commit {sha}: {detail}")
     commit_sha = resolved.stdout.strip()
-    command = gate_command(commit_sha)
-    key = memo_key(commit_sha, command)
+    command, scope = gate_declaration(commit_sha)
+    key = memo_key(commit_sha, command, scope)
     if _already_verified(key):
-        print(f"pre-push: tree of {commit_sha} already verified in this clone; skipping")
+        subject = "commit" if scope == "commit" else "tree of"
+        print(f"pre-push: {subject} {commit_sha} already verified in this clone; skipping")
         return False
 
     with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-") as directory:
@@ -230,20 +270,18 @@ def verify_outgoing_sha(sha: str) -> bool:
     return True
 
 
-def _build_usage_error(arguments: Sequence[str]) -> PrePushError | None:
-    if arguments:
-        return PrePushError("pre-push verifier does not accept command-line arguments")
-    return None
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    usage_error = _build_usage_error(arguments)
-    if usage_error is not None:
-        print(f"pre-push: {usage_error}", file=sys.stderr)
+    if len(arguments) != 2 or not arguments[0]:
+        print(
+            "pre-push: expected the destination remote's name and location, as Git passes them "
+            "to a pre-push hook",
+            file=sys.stderr,
+        )
         return 2
+    destination = arguments[0]
     try:
-        outgoing_shas = outgoing_commits(parse_outgoing_refs(sys.stdin))
+        outgoing_shas = outgoing_commits(parse_outgoing_refs(sys.stdin), destination)
         if not outgoing_shas:
             print("pre-push: no outgoing commits require verification")
             return 0

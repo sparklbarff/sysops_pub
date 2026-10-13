@@ -105,7 +105,7 @@ COMMANDS = (
 PARSERLESS = {
     "demo": "python3 tools/demo.py",
     "test": "python3 tools/test.py",
-    "pre_push": "invoked by .githooks/pre-push; takes no arguments",
+    "pre_push": "invoked by .githooks/pre-push with the destination remote's name and location",
 }
 
 ALL_PAGES = CHAPTERS + APPENDICES

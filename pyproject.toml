@@ -8,7 +8,9 @@ target-version = "py311"
 
 # The gate the pre-push driver runs from each outgoing commit's own tree, and the commands it
 # needs on PATH. {commit} is replaced by the commit being verified. A project adopting the gate
-# declares its own command here; without this table the driver assumes this repository's.
+# declares its own command here; without this table the driver assumes this repository's. This
+# gate reads commit identity and history, so its passes are remembered per commit, not per tree.
 [tool.sysops_pub.gate]
 command = ["python3", "tools/verify_release.py", "--require-tools", "--candidate-sha", "{commit}"]
 tools = ["black", "ruff", "gitleaks", "shellcheck"]
+memo = "commit"

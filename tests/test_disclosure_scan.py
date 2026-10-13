@@ -293,6 +293,64 @@ class DisclosureScanTests(unittest.TestCase):
                 self.assertEqual(disclosure_scan.main(), 1)
             self.assertIn(f"{added}:note.md: email address", stderr.getvalue())
 
+    def test_merge_only_text_is_found_under_the_merge_and_branch_text_is_not_repeated(
+        self,
+    ) -> None:
+        """A merge's own additions are found; lines a parent carried stay with that parent."""
+        with tempfile.TemporaryDirectory(prefix="disclosure-scan-") as directory:
+            repository = Path(directory) / "repository"
+            repository.mkdir()
+
+            def git(*arguments: str) -> str:
+                return subprocess.run(
+                    ["git", *arguments],
+                    cwd=repository,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            def write(name: str, text: str) -> None:
+                (repository / name).write_text(text, encoding="utf-8")
+
+            git("init", "-q", "-b", "main")
+            git("config", "user.email", "123+example-user" + "@" + "users.noreply.github.com")
+            git("config", "user.name", "example-user")
+            git("config", "commit.gpgsign", "false")
+            write("base.txt", "base\n")
+            git("add", "-A")
+            git("commit", "-q", "-m", "base")
+            git("checkout", "-q", "-b", "side")
+            write("side.txt", "branch contact side-user" + "@" + "invalid.test\n")
+            git("add", "-A")
+            git("commit", "-q", "-m", "side branch adds an identifier")
+            side = git("rev-parse", "HEAD")
+            git("checkout", "-q", "main")
+            write("main.txt", "main\n")
+            git("add", "-A")
+            git("commit", "-q", "-m", "main moves on")
+            git("merge", "-q", "--no-commit", "side")
+            write("base.txt", "base\nmerge contact merge-user" + "@" + "invalid.test\n")
+            write("merge_only.txt", "address " + "192." + "0.2.44\n")
+            git("add", "-A")
+            git("commit", "-q", "-m", "merge that adds text of its own")
+            merge = git("rev-parse", "HEAD")
+            write("base.txt", "base\n")
+            git("rm", "-q", "merge_only.txt", "side.txt")
+            git("add", "-A")
+            git("commit", "-q", "-m", "remove everything again")
+            findings = self._history_findings(repository, [])
+            self.assertEqual(
+                sorted(findings),
+                sorted(
+                    [
+                        f"{side}:side.txt: email address",
+                        f"{merge}:base.txt: email address",
+                        f"{merge}:merge_only.txt: IPv4 address",
+                    ]
+                ),
+            )
+
     def test_history_allowlist_rejects_abbreviated_commits(self) -> None:
         with tempfile.TemporaryDirectory(prefix="disclosure-scan-") as directory:
             repository, added, _removed = self._history_fixture(directory)

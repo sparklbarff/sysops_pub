@@ -246,12 +246,16 @@ def _history_content_findings() -> list[str]:
     disclosed as one still in the tree. The current-tree scan cannot see it; this one reads each
     commit's own diff. A hit is reported once per commit, path and label, and is suppressed only by
     an exact `history_findings` entry naming that full commit; an entry that no longer matches is
-    reported as stale. Merge commits show no diff of their own here, so a conflict resolution that
-    introduces text appears under the commit that carries it.
+    reported as stale.
+
+    A merge commit is read as a combined diff, which prefixes each line with one column per parent.
+    Only a line marked added in every column, present in no parent, is the merge's own text: a
+    conflict resolution or an evil merge. A line marked in some columns came from a parent and is
+    already reported under the commit that added it on that branch.
     """
     _findings, _binaries, _omissions, allowlist = _allowlist()
     result = subprocess.run(
-        ["git", "log", "-p", "--format=%x1e%H", "--unified=0", "--no-color", "HEAD"],
+        ["git", "log", "-p", "--cc", "--format=%x1e%H", "--unified=0", "--no-color", "HEAD"],
         cwd=ROOT,
         check=False,
         capture_output=True,
@@ -267,18 +271,20 @@ def _history_content_findings() -> list[str]:
             continue
         path: str | None = None
         in_hunk = False
+        columns = 1
         for line in body.splitlines():
-            if line.startswith("diff --git "):
+            if line.startswith(("diff --git ", "diff --cc ", "diff --combined ")):
                 path = None
                 in_hunk = False
             elif line.startswith("+++ ") and not in_hunk:
                 target = line[4:]
                 path = None if target == "/dev/null" else target.removeprefix("b/")
             elif line.startswith("@@"):
-                in_hunk = path is not None
-            elif in_hunk and line.startswith("+"):
+                columns = len(line) - len(line.lstrip("@")) - 1
+                in_hunk = path is not None and columns >= 1
+            elif in_hunk and line.startswith("+" * columns):
                 for label, pattern in TEXT_PATTERNS.items():
-                    if pattern.search(line[1:]):
+                    if pattern.search(line[columns:]):
                         finding = f"{commit}:{path}: {label}"
                         if finding in seen:
                             continue

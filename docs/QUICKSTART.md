@@ -123,10 +123,14 @@ replaced by that commit's identity wherever you use it, and the tools are the co
 requires on `PATH` before it wires the hook. Without the table the driver assumes this repository's
 own gate. Then install the hook as above with `python3 tools/bootstrap.py --execute`.
 
-A tree this clone has already verified with the same command is not verified again, so a push
-retried after a failure re-runs only the commits that changed. The memo lives inside `.git`, is
-never tracked, records the tree and the command but not the versions of the tools, and deleting
-`.git/sysops-pub-verified-trees` forces a full re-verification.
+The hook receives the destination from Git and verifies every commit that destination does not
+already have, including a commit some other remote already has. A commit this clone has already
+verified with the same command is not verified again, so a push retried after a failure re-runs
+only the commits that changed. The memo is keyed by commit identity, because a gate can read
+history and commit metadata that the files do not carry. A gate that reads only the files can add
+`memo = "tree"` to the table to be reused across commits with identical files; a gate that receives
+`{commit}` cannot. The memo lives inside `.git`, is never tracked, does not record the versions of
+the tools, and deleting `.git/sysops-pub-verified-gates` forces a full re-verification.
 
 ## Try supervised operations
 

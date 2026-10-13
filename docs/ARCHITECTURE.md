@@ -71,12 +71,15 @@ Derived state also needs explicit ownership. A repository event can invalidate s
 refresh planning maps one repository identity to every owned index. Treating that relationship as
 one-to-one can leave a secondary index stale while the refresh hook itself appears healthy.
 
-The tracked pre-push control applies this model literally. It consumes Git's outgoing ref records,
-materializes each outgoing commit in a temporary detached worktree, and runs the gate that commit
-declares in its own project file, or this repository's verifier when it declares none. A tree this
-clone has already verified with the same command is not verified again; the memo records the tree
-and the command, not the tools' versions, and lives untracked inside the Git directory. Unit tests
-separately prove that the tracked shell launcher reaches this driver.
+The tracked pre-push control applies this model literally. It consumes Git's outgoing ref records
+and the destination Git names, so the subject is what that destination does not yet have, not what
+some other remote has. It materializes each outgoing commit in a temporary detached worktree and
+runs the gate that commit declares in its own project file, or this repository's verifier when it
+declares none. A commit this clone has already verified with the same command is not verified
+again. The memo is keyed by the subject the gate judged: the commit, unless the gate declares that
+it reads only the files. Keying a commit-reading gate by tree would let a different commit with the
+same files reuse a pass it never earned. Unit tests separately prove that the tracked shell
+launcher reaches this driver with the destination and the ref records.
 
 ## Supervised operations
 
