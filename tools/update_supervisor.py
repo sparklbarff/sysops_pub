@@ -229,8 +229,10 @@ def check(target_raw: str | Path, channel: str | None = None) -> list[dict[str, 
     target, catalog, state = _open_sandbox(target_raw)
     entries = plan(catalog, state, channel)
     _print_plan(entries)
-    # A check that changes nothing must still surface an earlier failure that has not cleared.
-    _raise_if_unresolved(reconcile_unresolved(target, catalog, state), state)
+    # A check that changes nothing must still surface an earlier failure that has not cleared, and
+    # a check writes nothing: whether an entry is satisfied is reported, and the record changes only
+    # in an apply.
+    _raise_if_unresolved(reconcile_unresolved(target, catalog, state, persist=False), state)
     return entries
 
 
@@ -249,12 +251,14 @@ def reconcile_unresolved(
     catalog: dict[str, dict[str, str]],
     state: dict[str, dict[str, dict[str, object]]],
     failed: dict[str, str] | None = None,
+    persist: bool = True,
 ) -> dict[str, str]:
-    """Re-check every recorded failure against the real state and persist what is still unmet.
+    """Re-check every recorded failure against the real state; persist what is unmet if asked.
 
-    A pin records the target of a failed run. Reaching that target satisfies it, and so does
+    A pin records what a failed run should have left. Reaching it satisfies the pin, and so does
     reaching the catalog's current version, which supersedes an older target. Anything else,
-    including an update that simply never happened, stays recorded.
+    including an update that simply never happened, stays recorded. Without persist, a satisfied
+    pin is only reported; the record is left for the next mutating operation to clear.
     """
     pins = {**_load_pins(target), **(failed or {})}
     remaining: dict[str, str] = {}
@@ -263,7 +267,9 @@ def reconcile_unresolved(
         if _observed(state, key) not in (pinned, catalog.get(channel, {}).get(name)):
             remaining[key] = pinned
             print(f"UNRESOLVED   {_describe(key, pinned, state)}")
-    if pins or (target / UNRESOLVED_NAME).exists():
+        elif not persist:
+            print(f"RESOLVED     {key} now {_observed(state, key)}; cleared by the next apply")
+    if persist and (pins or (target / UNRESOLVED_NAME).exists()):
         _write_json_atomic(target / UNRESOLVED_NAME, remaining)
     return remaining
 
@@ -283,6 +289,35 @@ def _raise_if_unresolved(
     if remaining:
         details = "; ".join(_describe(key, pin, state) for key, pin in sorted(remaining.items()))
         raise UnresolvedError(f"earlier update failures persist: {details}")
+
+
+def _failed_dimensions(
+    channel: str,
+    actions: Sequence[dict[str, object]],
+    expected: dict[str, dict[str, dict[str, object]]],
+    observed: dict[str, dict[str, dict[str, object]]] | None,
+) -> dict[str, str]:
+    """Every item whose persisted version is not what the run expected, with that expectation.
+
+    That covers a selected update that did not persist and an unselected item a collateral write
+    changed: both are recorded at the version they should have. Pinning only the selected items
+    would let a correct selected version clear the record at once and hide the collateral damage.
+    When the state could not be read back at all, the selected updates are what is known to be at
+    risk.
+    """
+    if observed is None:
+        return {
+            f"{channel}/{item['name']}": str(item["available"])
+            for item in actions
+            if item["action"] == "updated"
+        }
+    failed: dict[str, str] = {}
+    for channel_name, items in expected.items():
+        for name, item in items.items():
+            persisted = observed.get(channel_name, {}).get(name, {}).get("version")
+            if persisted != item["version"]:
+                failed[f"{channel_name}/{name}"] = str(item["version"])
+    return failed
 
 
 def _receipt_name(now: datetime) -> str:
@@ -339,11 +374,7 @@ def apply(
         "verification_error": verification_error,
         "verification_passed": verification_passed,
     }
-    failed = {
-        f"{channel}/{item['name']}": str(item["available"])
-        for item in actions
-        if item["action"] == "updated" and not verification_passed
-    }
+    failed = {} if verification_passed else _failed_dimensions(channel, actions, state, observed)
     reread = observed if observed is not None else before
     receipt["unresolved"] = reconcile_unresolved(target, catalog, reread, failed)
     _write_json_atomic(receipt_path, receipt)

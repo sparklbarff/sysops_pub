@@ -29,12 +29,19 @@ directory that is a symlink or a file and any output file that is a symlink, and
 replaced through a temporary file with a unique, exclusively created name, so a link planted at a
 predictable temporary name is never followed.
 
-A failed verification also records each item's target in `unresolved.json` inside the sandbox.
-Every later check or apply re-reads that record against the real state and exits 1 while any entry
-is unmet, so a run that changes nothing cannot read as all-clear. An entry clears when the item
-reaches its recorded target or the catalog's current version, which supersedes an older target.
-Without that second condition, a record written before a newer release could never clear; without
-the record, an update that never happened would vanish behind the next generic check.
+A failed verification also records, in `unresolved.json` inside the sandbox, every item whose
+persisted version differs from what the run expected, at the version it should have: a selected
+update that did not persist, and an unselected item a collateral write changed. Recording only the
+selected items would let a correct selected version clear the record at once and hide the
+collateral damage. Every later check or apply re-reads that record against the real state and exits
+1 while any entry is unmet, so a run that changes nothing cannot read as all-clear. An entry is
+satisfied when the item reaches its recorded version or the catalog's current version, which
+supersedes an older target. Without that second condition, a record written before a newer release
+could never clear; without the record, an update that never happened would vanish behind the next
+generic check.
+
+A check only observes. It reports a satisfied entry but never writes the record; the record changes
+only in an apply, the operation that is allowed to write.
 
 A new interpreter is a migration, not an update. A routine package upgrade can pull in a new
 default interpreter and silently move the command every other tool resolves, leaving each of them

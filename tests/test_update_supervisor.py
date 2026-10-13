@@ -70,11 +70,64 @@ class UpdateSupervisorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
             target = Path(directory) / "sandbox"
             update_supervisor.initialize(target, execute=True)
-            update_supervisor.apply(target, "cli-tools", execute=True)
+            first = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+            update_supervisor.apply(target, "cli-tools", execute=True, clock=lambda: first)
             record = target / update_supervisor.UNRESOLVED_NAME
             # The failed run targeted 1.9.0; the catalog has since moved to 2.0.0, now installed.
             record.write_text(json.dumps({"cli-tools/formatter": "1.9.0"}), encoding="utf-8")
             update_supervisor.check(target)
+            self.assertEqual(json.loads(record.read_text()), {"cli-tools/formatter": "1.9.0"})
+            later = datetime(2026, 1, 2, 3, 4, 6, tzinfo=UTC)
+            update_supervisor.apply(target, "cli-tools", execute=True, clock=lambda: later)
+            self.assertEqual(json.loads(record.read_text()), {})
+
+    def test_check_never_writes_the_record(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
+            target = Path(directory) / "sandbox"
+            update_supervisor.initialize(target, execute=True)
+            record = target / update_supervisor.UNRESOLVED_NAME
+            update_supervisor.check(target)
+            self.assertFalse(record.exists())
+            for pins in ({"cli-tools/retriever": "3.1.0"}, {}):
+                with self.subTest(pins=pins):
+                    record.write_text(json.dumps(pins), encoding="utf-8")
+                    before = (record.read_bytes(), record.stat().st_mtime_ns)
+                    update_supervisor.check(target)
+                    self.assertEqual((record.read_bytes(), record.stat().st_mtime_ns), before)
+
+    def test_collateral_damage_survives_a_later_check_until_repaired(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
+            target = Path(directory) / "sandbox"
+            update_supervisor.initialize(target, execute=True)
+            writer = update_supervisor._write_json_atomic
+
+            def collateral_write(path: Path, value: object) -> None:
+                writer(path, value)
+                if path.name == update_supervisor.STATE_NAME:
+                    state = json.loads(path.read_text())
+                    state["channels"]["desktop-apps"]["terminal"]["version"] = "unexpected"
+                    writer(path, state)
+
+            first = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+            with (
+                mock.patch.object(update_supervisor, "_write_json_atomic", collateral_write),
+                self.assertRaisesRegex(update_supervisor.UpdateError, "verification failed"),
+            ):
+                update_supervisor.apply(target, "cli-tools", execute=True, clock=lambda: first)
+            record = target / update_supervisor.UNRESOLVED_NAME
+            self.assertEqual(json.loads(record.read_text()), {"desktop-apps/terminal": "4.0.0"})
+            with self.assertRaisesRegex(
+                update_supervisor.UnresolvedError, "desktop-apps/terminal expected 4.0.0"
+            ):
+                update_supervisor.check(target)
+            state_path = target / update_supervisor.STATE_NAME
+            state = json.loads(state_path.read_text())
+            state["channels"]["desktop-apps"]["terminal"]["version"] = "4.0.0"
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            update_supervisor.check(target)
+            self.assertEqual(json.loads(record.read_text()), {"desktop-apps/terminal": "4.0.0"})
+            later = datetime(2026, 1, 2, 3, 4, 6, tzinfo=UTC)
+            update_supervisor.apply(target, "cli-tools", execute=True, clock=lambda: later)
             self.assertEqual(json.loads(record.read_text()), {})
 
     def test_pin_still_fails_when_the_update_never_happened(self) -> None:

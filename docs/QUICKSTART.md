@@ -156,10 +156,12 @@ python3 tools/managed_job.py --receipt ../managed-job.json --timeout 60 -- pytho
 
 The receipt omits raw command arguments. On POSIX the runner cleans up only its owned group and
 checks terminal ownership even when the leading process reports success. Leftover children produce
-exit 125, not success. Windows does not yet have descendant ownership through Job Objects.
+exit 125, not success. Cancelling the runner with SIGTERM or SIGHUP cleans up the job and still
+writes the receipt. Windows does not yet have descendant ownership through Job Objects.
 The updater uses version-3 receipts and the runner version-2 receipts; the updater's observed state
-comes from fresh disk readback, not the dictionary its apply step changed. A failed update stays in
-the sandbox's `unresolved.json`, and every later check exits 1 until the item is actually resolved.
+comes from fresh disk readback, not the dictionary its apply step changed. A failed update, or an
+unselected item it damaged, stays in the sandbox's `unresolved.json`, and every later check exits 1
+until the item is actually resolved. A check never writes; the record is cleared by the next apply.
 
 Prove that a checker discriminates real cases before trusting it:
 

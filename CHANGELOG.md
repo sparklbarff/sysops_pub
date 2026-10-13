@@ -20,6 +20,14 @@ Repairs for the remaining public findings of the same joint audit, each reproduc
   the timeout path, records the receipt as interrupted and exits 128 plus the signal number. A test
   signals the real runner process and requires the receipt, the exit code, the job's child gone and
   an unrelated process untouched; the previous runner dies on the signal.
+- Keep a preservation failure on record, and make the updater's check observational. A collateral
+  write to an unselected item failed verification, but only the selected items were recorded, at
+  versions that were correct, so the record cleared at once and the next check passed. A failed
+  verification now records every item whose persisted version differs from the expected one, at the
+  expected version. Separately, check rewrote `unresolved.json` despite its check-without-writing
+  contract; it now reports a satisfied entry and leaves the record for the next apply. Tests run the
+  collateral failure through a later check, a repair and an apply, and require check to leave the
+  record's bytes and timestamp unchanged; the previous updater fails each.
 
 ## 0.11.2 - 2026-10-13
 
