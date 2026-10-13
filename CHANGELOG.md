@@ -34,6 +34,16 @@ Repairs for the remaining public findings of the same joint audit, each reproduc
   resolve against the base the retriever used, and one that resolves outside the evaluated corpus
   is an error. A test with a colliding `README.md` gets both verdicts right; the previous evaluator
   inverts both.
+- Repair what an audit of the live manual found. All fifteen manual pages had no top-level heading;
+  the running head's first label is now the page's one `h1`, styled as before, and the build test
+  requires exactly one on every page. Wrapped inline code was painted as one box sliced across
+  lines, which pushed the second fragment's box past the column's left edge; each line now gets its
+  own box, and the short tokens in notes no longer split at a slash. Manual-page examples taken
+  from PowerShell blocks now carry the documents' "Windows, untested" label instead of reading as
+  tested commands. The disclosure rating names the history it now covers. The audit also confirmed
+  every page and asset returns 200, every external link resolves, the security headers are intact,
+  no disclosure pattern appears in served pages, and every text color pair meets WCAG AA in both
+  themes.
 
 ## 0.11.2 - 2026-10-13
 

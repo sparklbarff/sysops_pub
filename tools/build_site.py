@@ -139,7 +139,12 @@ DIAGRAM_LINE = re.compile(r"^\s*v\s*$", re.MULTILINE)
 # Absolute maximum ratings: each row is printed only when the gate reported this exact pass.
 RATINGS = (
     ("Secrets in the tree or Git history", "0", "gitleaks Git history", "gitleaks"),
-    ("Personal identifiers in tracked files", "0", "dependency-free suite", "disclosure scan"),
+    (
+        "Personal identifiers in tracked files or added history",
+        "0",
+        "dependency-free suite",
+        "disclosure scan",
+    ),
     ("Failing tests", "0", "dependency-free suite", "test suite"),
     ("Untracked files in the release", "0", "no untracked files", "release check"),
 )
@@ -638,9 +643,11 @@ def render_man(page: ManPage, examples: list[str], see_also: list[tuple[str, str
         for title, body in blocks
     )
     upper = page.name.upper()
+    # The running head's first label is the page's one top-level heading, as a manual page's
+    # title line is; styled as the label it replaces.
     return (
-        f'<div class="manpage"><p class="manrun"><span>{upper}(1)</span>'
-        f"<span>sysops_pub Commands</span><span>{upper}(1)</span></p>{sections}</div>"
+        f'<div class="manpage"><header class="manrun"><h1>{upper}(1)</h1>'
+        f"<span>sysops_pub Commands</span><span>{upper}(1)</span></header>{sections}</div>"
     )
 
 
@@ -1425,15 +1432,25 @@ def _write(root: Path, relative: str, text: str) -> None:
     target.write_text(text, encoding="utf-8")
 
 
+WINDOWS_EXAMPLE_NOTE = "  # Windows, untested"
+
+
 def _examples(name: str) -> list[str]:
-    """Every command line in the tracked documents that runs this tool, verbatim."""
+    """Every command line in the tracked documents that runs this tool, verbatim.
+
+    A line from a PowerShell block carries the documents' own caveat as a trailing comment, which
+    PowerShell ignores: the quick start calls those commands an untested design sketch, and a
+    manual page that dropped the label would present them as tested.
+    """
     found: list[str] = []
     for source in [HOME_SOURCE] + [page.source for page in ALL_PAGES]:
         text = (REPO_ROOT / source).read_text(encoding="utf-8")
-        for block in re.findall(r"```[a-z]*\n(.*?)```", text, re.DOTALL):
+        for language, block in re.findall(r"```([a-z]*)\n(.*?)```", text, re.DOTALL):
+            note = WINDOWS_EXAMPLE_NOTE if language == "powershell" else ""
             for line in block.splitlines():
-                if f"tools/{name}.py" in line and line.strip() not in found:
-                    found.append(line.strip())
+                example = line.strip() + note
+                if f"tools/{name}.py" in line and example not in found:
+                    found.append(example)
     return found
 
 

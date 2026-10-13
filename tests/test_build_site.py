@@ -213,6 +213,17 @@ class CorpusTests(unittest.TestCase):
             ["init", "plan", "apply", "verify", "report"],
         )
 
+    def test_windows_examples_keep_the_untested_label(self) -> None:
+        examples = build_site._examples("adopt")
+        windows = [line for line in examples if line.startswith("py -3 ")]
+        posix = [line for line in examples if line.startswith("python3 ")]
+        self.assertTrue(windows)
+        self.assertTrue(posix)
+        for line in windows:
+            self.assertTrue(line.endswith(build_site.WINDOWS_EXAMPLE_NOTE), line)
+        for line in posix:
+            self.assertNotIn("untested", line)
+
 
 class RevisionAndGateTests(unittest.TestCase):
     PASSING = (
@@ -366,6 +377,7 @@ class BuildTests(unittest.TestCase):
                 )
                 ids = [value for name, value in collector.attributes if name == "id"]
                 self.assertEqual(len(ids), len(set(ids)), page)
+                self.assertEqual(collector.tags.count("h1"), 1, f"{page}: top-level headings")
                 self.assertIsNone(re.search(r"\$[a-z_]+", re.sub(r"<pre.*?</pre>", "", html)))
                 for name, href in collector.attributes:
                     if name == "href" and href and href.startswith("/"):
