@@ -4,14 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
 import signal
 import subprocess
 import sys
+import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -20,10 +22,53 @@ RECEIPT_SCHEMA_VERSION = 2
 TIMEOUT_RETURN_CODE = 124
 START_FAILURE_RETURN_CODE = 127
 OWNERSHIP_RETURN_CODE = 125
+CANCEL_SIGNALS = tuple(
+    number
+    for number in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None))
+    if number is not None
+)
 
 
 class ManagedJobError(RuntimeError):
     """The managed job request is unsafe or incomplete."""
+
+
+class _Cancelled(BaseException):
+    """The runner itself was asked to stop while it waited on the owned job."""
+
+    def __init__(self, signum: int) -> None:
+        super().__init__(signum)
+        self.signum = signum
+
+
+@contextlib.contextmanager
+def _cancellation() -> Iterator[dict[str, int]]:
+    """Route SIGTERM and SIGHUP into the runner, so cancelling it cleans up what it owns.
+
+    The child runs in its own session, so a signal to the runner never reaches it; left to the
+    default action the runner would die and leave the job running with no receipt. Every signal is
+    recorded; only while the caller has armed the state does the first one raise into the wait, so
+    cleanup and the receipt always complete. Handlers can be installed only from the main thread;
+    elsewhere the previous behavior is unchanged.
+    """
+    state = {"armed": 0, "signum": 0}
+    if threading.current_thread() is not threading.main_thread():
+        yield state
+        return
+
+    def handler(signum: int, _frame: object) -> None:
+        if not state["signum"]:
+            state["signum"] = signum
+        if state["armed"]:
+            state["armed"] = 0
+            raise _Cancelled(signum)
+
+    previous = {number: signal.signal(number, handler) for number in CANCEL_SIGNALS}
+    try:
+        yield state
+    finally:
+        for number, original in previous.items():
+            signal.signal(number, original)
 
 
 def _safe_receipt(raw: str | Path) -> Path:
@@ -151,35 +196,78 @@ def run_managed(
     elif os.name == "nt":
         popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
 
-    try:
-        process = subprocess.Popen(list(command), **popen_options)
-        process_id = process.pid
-    except OSError as exc:
-        return_code = START_FAILURE_RETURN_CODE
-        start_error = type(exc).__name__
-    else:
-        start_error = None
+    with _cancellation() as cancel:
         try:
-            return_code = process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            termination_attempted = _stop_owned_process(process)
-            return_code = TIMEOUT_RETURN_CODE
-        except KeyboardInterrupt:
-            interrupted = True
-            termination_attempted = _stop_owned_process(process)
-            return_code = 130
+            process = subprocess.Popen(list(command), **popen_options)
+            process_id = process.pid
+        except OSError as exc:
+            return_code = START_FAILURE_RETURN_CODE
+            start_error = type(exc).__name__
+        else:
+            start_error = None
+            try:
+                try:
+                    # Armed only while waiting: a signal during cleanup or the receipt is recorded,
+                    # never raised, and one that arrived while starting is honored now.
+                    cancel["armed"] = 1
+                    if cancel["signum"]:
+                        raise _Cancelled(cancel["signum"])
+                    return_code = process.wait(timeout=timeout)
+                finally:
+                    cancel["armed"] = 0
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                termination_attempted = _stop_owned_process(process)
+                return_code = TIMEOUT_RETURN_CODE
+            except KeyboardInterrupt:
+                interrupted = True
+                termination_attempted = _stop_owned_process(process)
+                return_code = 130
+            except _Cancelled as cancelled:
+                interrupted = True
+                termination_attempted = _stop_owned_process(process)
+                return_code = 128 + cancelled.signum
 
-        if os.name == "posix":
-            if _group_terminal(process.pid) is not True:
-                leftover_children = not timed_out and not interrupted
-                termination_attempted = _stop_owned_process(process) or termination_attempted
-                if leftover_children:
+            if os.name == "posix":
+                if _group_terminal(process.pid) is not True:
+                    leftover_children = not timed_out and not interrupted
+                    termination_attempted = _stop_owned_process(process) or termination_attempted
+                    if leftover_children:
+                        return_code = OWNERSHIP_RETURN_CODE
+                owned_group_terminal = _group_terminal(process.pid)
+                if not owned_group_terminal:
                     return_code = OWNERSHIP_RETURN_CODE
-            owned_group_terminal = _group_terminal(process.pid)
-            if not owned_group_terminal:
-                return_code = OWNERSHIP_RETURN_CODE
+        return _finish(
+            receipt_path,
+            command,
+            started_at,
+            started_clock,
+            return_code=return_code,
+            start_error=start_error,
+            process_id=process_id,
+            timed_out=timed_out,
+            interrupted=interrupted,
+            termination_attempted=termination_attempted,
+            leftover_children=leftover_children,
+            owned_group_terminal=owned_group_terminal,
+        )
 
+
+def _finish(
+    receipt_path: Path,
+    command: Sequence[str],
+    started_at: datetime,
+    started_clock: float,
+    *,
+    return_code: int,
+    start_error: str | None,
+    process_id: int | None,
+    timed_out: bool,
+    interrupted: bool,
+    termination_attempted: bool,
+    leftover_children: bool,
+    owned_group_terminal: bool | None,
+) -> int:
     ended_at = datetime.now(UTC)
     receipt = {
         "argument_count": max(0, len(command) - 1),

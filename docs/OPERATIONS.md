@@ -90,6 +90,13 @@ failure, on every job run inside the sandbox. A zombie exists until it is reaped
 waits briefly for the system to reap what a dead leader left before it concludes; a live child
 outlasts that window and is a leftover.
 
+Cancelling the runner is cancelling the job. The job runs in its own session, so a SIGTERM or SIGHUP
+sent to the runner never reaches it, and the runner's default response, dying on the spot, would
+leave the job running with no receipt. The runner catches both while it waits, terminates its owned
+group through the same cleanup as a timeout, writes a receipt marked interrupted, and exits 128 plus
+the signal number. A signal that arrives during cleanup or the receipt is recorded, not obeyed, so
+both complete.
+
 This is group ownership, not confinement of a child that deliberately creates another session.
 Windows retains leading-process termination only; complete descendant ownership needs a native Job
 Object adapter. The reference does not claim that missing adapter or native Windows execution proof.

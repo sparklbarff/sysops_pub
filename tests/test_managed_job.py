@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -15,8 +16,85 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import managed_job
 
+RUNNER = ROOT / "tools" / "managed_job.py"
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _wait_for(predicate: object, seconds: float) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if callable(predicate) and predicate():
+            return True
+        time.sleep(0.05)
+    return False
+
 
 class ManagedJobTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "POSIX signal and process-group proof")
+    def test_cancelling_the_runner_cleans_up_its_job_and_writes_the_receipt(self) -> None:
+        leader = (
+            "import subprocess,sys,pathlib,time; "
+            "p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); "
+            "pathlib.Path(sys.argv[1]).write_text(str(p.pid)); time.sleep(30)"
+        )
+        for signum in (signal.SIGTERM, signal.SIGHUP):
+            with (
+                self.subTest(signal=signum.name),
+                tempfile.TemporaryDirectory(prefix="managed-job-") as directory,
+            ):
+                pid_file = Path(directory) / "child.pid"
+                receipt = Path(directory) / "cancelled.json"
+                unrelated = subprocess.Popen(
+                    [sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True
+                )
+                runner = subprocess.Popen(
+                    [
+                        sys.executable,
+                        str(RUNNER),
+                        "--receipt",
+                        str(receipt),
+                        "--",
+                        sys.executable,
+                        "-c",
+                        leader,
+                        str(pid_file),
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                child_pid = None
+                try:
+                    self.assertTrue(_wait_for(pid_file.exists, 10), "job never started its child")
+                    child_pid = pid = int(pid_file.read_text())
+                    runner.send_signal(signum)
+                    self.assertEqual(runner.wait(timeout=15), 128 + signum)
+                    value = json.loads(receipt.read_text())
+                    self.assertTrue(value["interrupted"])
+                    self.assertTrue(value["owned_group_terminal"])
+                    self.assertEqual(value["return_code"], 128 + signum)
+                    self.assertTrue(
+                        _wait_for(lambda pid=pid: not _alive(pid), 5),
+                        "job child outlived the runner",
+                    )
+                    self.assertIsNone(unrelated.poll())
+                finally:
+                    if runner.poll() is None:
+                        runner.kill()
+                        runner.wait(timeout=5)
+                    if child_pid is not None and _alive(child_pid):
+                        os.kill(child_pid, signal.SIGKILL)
+                    unrelated.terminate()
+                    unrelated.wait(timeout=5)
+
     def test_nonfinite_timeout_is_refused_before_launch(self) -> None:
         with tempfile.TemporaryDirectory(prefix="managed-job-") as directory:
             for timeout in (float("inf"), float("nan"), 0, -1):

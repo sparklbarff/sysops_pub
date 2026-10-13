@@ -14,6 +14,12 @@ Repairs for the remaining public findings of the same joint audit, each reproduc
   before it writes the state, and replaces each file through a uniquely named, exclusively created
   temporary file. Tests cover each refused path with the state and an outside file unchanged, and
   planted temporary links that a legitimate apply must not follow.
+- Clean up the owned job when the managed-job runner itself is cancelled. The job runs in its own
+  session, so SIGTERM or SIGHUP sent to the runner killed only the runner, left the job running and
+  wrote no receipt. The runner now catches both while it waits, terminates its owned group through
+  the timeout path, records the receipt as interrupted and exits 128 plus the signal number. A test
+  signals the real runner process and requires the receipt, the exit code, the job's child gone and
+  an unrelated process untouched; the previous runner dies on the signal.
 
 ## 0.11.2 - 2026-10-13
 
