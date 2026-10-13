@@ -8,6 +8,12 @@ Repairs for the remaining public findings of the same joint audit, each reproduc
   every published commit passed its own suite; one commit, `1541a09`, went out unchecked before
   0.10.1, and the range and memo were not bound to the destination and commit until 0.11.2. It now
   states the per-push policy, the version each part dates from, and the known exception.
+- Keep every updater write inside its sandbox. A `receipts` symlink sent the receipt outside, and a
+  link planted at the predictable `.state.json.tmp` name was written through. The updater now
+  refuses a receipts directory that is a symlink or a file, and any output file that is a symlink,
+  before it writes the state, and replaces each file through a uniquely named, exclusively created
+  temporary file. Tests cover each refused path with the state and an outside file unchanged, and
+  planted temporary links that a legitimate apply must not follow.
 
 ## 0.11.2 - 2026-10-13
 

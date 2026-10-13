@@ -24,6 +24,11 @@ The synthetic updater demonstrates independent verification by reopening the sta
 checking both the expected update and preservation of unselected channels. Its version-3 receipt
 separates expected state from observed state. A dropped or collateral write cannot earn VERIFIED.
 
+Every path it writes stays inside the marked sandbox. Before the first write it refuses a receipts
+directory that is a symlink or a file and any output file that is a symlink, and each file is
+replaced through a temporary file with a unique, exclusively created name, so a link planted at a
+predictable temporary name is never followed.
+
 A failed verification also records each item's target in `unresolved.json` inside the sandbox.
 Every later check or apply re-reads that record against the real state and exits 1 while any entry
 is unmet, so a run that changes nothing cannot read as all-clear. An entry clears when the item

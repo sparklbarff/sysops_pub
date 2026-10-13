@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import sys
+import tempfile
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -104,9 +106,44 @@ def _validate_state(
 
 
 def _write_json_atomic(path: Path, value: object) -> None:
-    temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    """Replace path through a fresh, exclusively created temporary file in a real directory.
+
+    A predictable temporary name could already exist as a symlink to a file outside the sandbox,
+    and writing to it would follow the link. The temporary file is created with a unique name that
+    cannot pre-exist, and neither the destination nor its directory may be a symlink.
+    """
+    if path.is_symlink():
+        raise UpdateError(f"refusing to write through a symlink: {path}")
+    if path.parent.is_symlink() or not path.parent.is_dir():
+        raise UpdateError(f"output directory is missing or a symlink: {path.parent}")
+    descriptor, temporary = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(value, indent=2, sort_keys=True) + "\n")
+        os.replace(temporary, path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
+def _prepare_outputs(target: Path, receipt_path: Path) -> None:
+    """Refuse every output path that could leave the sandbox, before the first write.
+
+    The receipts directory must be a real directory inside the sandbox, created here if absent, and
+    no output file may be a symlink. Checking afterwards would be too late: the state is the first
+    thing written.
+    """
+    receipts = receipt_path.parent
+    for path in (target / STATE_NAME, target / UNRESOLVED_NAME, receipt_path):
+        if path.is_symlink():
+            raise UpdateError(f"refusing output path that is a symlink: {path}")
+    if receipts.is_symlink() or (receipts.exists() and not receipts.is_dir()):
+        raise UpdateError(f"receipts path is not a real directory: {receipts}")
+    receipts.mkdir(exist_ok=True)
+    if receipts.resolve().parent != target:
+        raise UpdateError(f"receipts directory resolves outside the sandbox: {receipts}")
 
 
 def initialize(target_raw: str | Path, execute: bool) -> Path:
@@ -270,6 +307,7 @@ def apply(
     receipt_path = receipts / _receipt_name(now)
     if receipt_path.exists():
         raise UpdateError(f"refusing to overwrite existing receipt: {receipt_path.name}")
+    _prepare_outputs(target, receipt_path)
 
     before = copy.deepcopy(state)
     actions: list[dict[str, object]] = []
@@ -308,7 +346,6 @@ def apply(
     }
     reread = observed if observed is not None else before
     receipt["unresolved"] = reconcile_unresolved(target, catalog, reread, failed)
-    receipts.mkdir(exist_ok=True)
     _write_json_atomic(receipt_path, receipt)
     if not verification_passed:
         raise UpdateError("post-update verification failed")

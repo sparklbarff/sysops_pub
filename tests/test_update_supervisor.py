@@ -192,6 +192,63 @@ class UpdateSupervisorTests(unittest.TestCase):
             with self.assertRaises(update_supervisor.UpdateError):
                 update_supervisor.initialize(link, execute=True)
 
+    def test_output_paths_that_leave_the_sandbox_are_refused_before_any_write(self) -> None:
+        fixed_time = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+        cases = ("receipts-symlink", "receipts-file", "unresolved-symlink", "receipt-symlink")
+        for case in cases:
+            with (
+                self.subTest(case=case),
+                tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory,
+            ):
+                target = Path(directory) / "sandbox"
+                outside = Path(directory) / "outside"
+                outside.mkdir()
+                victim = outside / "victim.json"
+                victim.write_text("keep\n", encoding="utf-8")
+                update_supervisor.initialize(target, execute=True)
+                receipts = target / update_supervisor.RECEIPTS_NAME
+                if case == "receipts-symlink":
+                    receipts.symlink_to(outside, target_is_directory=True)
+                elif case == "receipts-file":
+                    receipts.write_text("not a directory\n", encoding="utf-8")
+                elif case == "unresolved-symlink":
+                    (target / update_supervisor.UNRESOLVED_NAME).symlink_to(victim)
+                else:
+                    receipts.mkdir()
+                    (receipts / "update-20260102T030405Z.json").symlink_to(victim)
+                state_path = target / update_supervisor.STATE_NAME
+                before = state_path.read_bytes()
+                with self.assertRaises(update_supervisor.UpdateError):
+                    update_supervisor.apply(
+                        target, "cli-tools", execute=True, clock=lambda: fixed_time
+                    )
+                self.assertEqual(state_path.read_bytes(), before)
+                self.assertEqual(sorted(path.name for path in outside.iterdir()), ["victim.json"])
+                self.assertEqual(victim.read_text(encoding="utf-8"), "keep\n")
+
+    def test_planted_temporary_paths_are_never_written_through(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
+            target = Path(directory) / "sandbox"
+            victim = Path(directory) / "victim.json"
+            victim.write_text("keep\n", encoding="utf-8")
+            update_supervisor.initialize(target, execute=True)
+            receipts = target / update_supervisor.RECEIPTS_NAME
+            receipts.mkdir()
+            fixed_time = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+            for planted in (
+                target / f".{update_supervisor.STATE_NAME}.tmp",
+                target / f".{update_supervisor.UNRESOLVED_NAME}.tmp",
+                receipts / ".update-20260102T030405Z.json.tmp",
+            ):
+                planted.symlink_to(victim)
+            (target / update_supervisor.UNRESOLVED_NAME).write_text("{}", encoding="utf-8")
+            receipt_path = update_supervisor.apply(
+                target, "cli-tools", execute=True, clock=lambda: fixed_time
+            )
+            assert receipt_path is not None
+            self.assertTrue(json.loads(receipt_path.read_text())["verification_passed"])
+            self.assertEqual(victim.read_text(encoding="utf-8"), "keep\n")
+
     def test_existing_receipt_is_not_overwritten_or_followed_by_mutation(self) -> None:
         with tempfile.TemporaryDirectory(prefix="update-supervisor-") as directory:
             target = Path(directory) / "sandbox"
