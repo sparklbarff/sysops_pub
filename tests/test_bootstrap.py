@@ -118,6 +118,60 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn("install the mandatory release tools", stderr.getvalue())
         self.assertEqual(self.configured_hooks_path(), "")
 
+    def set_hooks_path(self, value: str) -> None:
+        subprocess.run(
+            ["git", "config", "--local", "core.hooksPath", value], cwd=self.repository, check=True
+        )
+
+    def test_an_existing_hooks_path_is_not_overwritten(self) -> None:
+        """Repair audit 2026-11-03: bootstrap replaced .existing-hooks and exited 0."""
+        self.set_hooks_path(".existing-hooks")
+        result, stdout, stderr = self.run_bootstrap("--execute")
+        self.assertEqual(result, 2)
+        self.assertIn("EXISTING core.hooksPath '.existing-hooks' would be replaced", stdout)
+        self.assertIn("--replace-existing-hooks", stderr)
+        self.assertEqual(self.configured_hooks_path(), ".existing-hooks")
+
+    def test_a_recorded_takeover_is_undone_exactly(self) -> None:
+        self.set_hooks_path(".existing-hooks")
+        result, _stdout, stderr = self.run_bootstrap("--execute", "--replace-existing-hooks")
+        self.assertEqual(result, 0, stderr)
+        self.assertEqual(self.configured_hooks_path(), ".githooks")
+        record = self.repository / ".git" / bootstrap.RECORD_NAME
+        self.assertIn('"previous_hooks_path": ".existing-hooks"', record.read_text())
+        self.assertEqual(self.run_bootstrap("--uninstall")[0], 0)
+        self.assertEqual(self.configured_hooks_path(), ".existing-hooks")
+        self.assertFalse(record.exists())
+        # A fresh install and removal leave core.hooksPath unset again.
+        subprocess.run(
+            ["git", "config", "--local", "--unset", "core.hooksPath"],
+            cwd=self.repository,
+            check=True,
+        )
+        self.assertEqual(self.run_bootstrap("--execute")[0], 0)
+        self.assertEqual(self.run_bootstrap("--uninstall")[0], 0)
+        self.assertEqual(self.configured_hooks_path(), "")
+
+    def test_uninstall_leaves_a_later_owner_alone(self) -> None:
+        self.assertEqual(self.run_bootstrap("--execute")[0], 0)
+        self.set_hooks_path(".someone-else")
+        result, _stdout, stderr = self.run_bootstrap("--uninstall")
+        self.assertEqual(result, 2)
+        self.assertIn("left alone", stderr)
+        self.assertEqual(self.configured_hooks_path(), ".someone-else")
+        self.assertEqual(self.run_bootstrap("--uninstall")[0], 2)
+
+    @unittest.skipIf(os.name == "nt", "POSIX executable mode decides an active hook")
+    def test_active_default_hooks_are_not_silently_disabled(self) -> None:
+        hook = self.repository / ".git" / "hooks" / "pre-commit"
+        hook.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        hook.chmod(0o755)
+        result, stdout, _stderr = self.run_bootstrap("--execute")
+        self.assertEqual(result, 2)
+        self.assertIn("would stop running: pre-commit", stdout)
+        self.assertEqual(self.configured_hooks_path(), "")
+        self.assertEqual(self.run_bootstrap("--uninstall")[0], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

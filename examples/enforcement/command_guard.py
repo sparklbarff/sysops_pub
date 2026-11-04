@@ -15,6 +15,12 @@ operators, finds the word in command position, and judges five classes:
 - masked push: a git push whose exit status a pipe would replace with the last stage's
 - private address: a fetch of a loopback, private, link-local, or local-name host
 
+PowerShell commands (a leading powershell or pwsh, or a Verb-Noun cmdlet in command position) are
+lexed without POSIX escapes, so Windows paths keep their separators for the path checks, and
+Remove-Item -Recurse (and its aliases) and Set-Content, Add-Content, Out-File and the copy and move
+cmdlets aimed at a credential path are judged too. Wrapper options that take a value (env -u NAME,
+sudo -u USER) and git's global options (git -C dir push) are skipped to find the real command.
+
 It sees top-level structure only. A command hidden inside a command substitution, a string handed to
 an interpreter, or a script invoked by path is not seen; the project's own gates remain the boundary
 for those. A command the lexer cannot parse is blocked rather than guessed at. It prevents an
@@ -39,6 +45,44 @@ OUTPUT_REDIRECTIONS = {">", ">>", ">|", "&>", "&>>"}
 INPUT_REDIRECTIONS = {"<", "<<", "<<<"}
 DESCRIPTOR_REDIRECTIONS = {">&", "<&"}
 WRAPPERS = {"sudo", "doas", "env", "nohup", "time", "exec", "command", "nice", "caffeinate"}
+# Wrapper options that take the next word as their value. Without these, `env -u NAME rm -rf x`
+# read NAME as the command and admitted the delete (repair audit 2026-11-03).
+WRAPPER_VALUE_OPTIONS = {
+    "env": {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"},
+    "sudo": {"-u", "--user", "-g", "--group", "-C", "-h", "--host", "-p", "--prompt", "-D", "-r"},
+    "doas": {"-u", "-C"},
+    "nice": {"-n", "--adjustment"},
+    "time": {"-o", "--output", "-f", "--format"},
+    "exec": {"-a"},
+}
+# git options that come before the subcommand and take a value: `git -C dir push` is a push.
+GIT_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+# PowerShell (repair audit 2026-11-03): its delete, credential-read and environment-write forms all
+# passed. Recognised by a leading powershell/pwsh or a Verb-Noun cmdlet in command position.
+POWERSHELL = re.compile(
+    r"(?i)(?:^|[;|&(]\s*)(?:powershell|pwsh|"
+    r"(?:get|set|add|remove|out|copy|move|new|invoke|start|clear)-[a-z]+)\b"
+    # A Windows drive path (C:\...) is as clear a sign as a cmdlet, and the POSIX lexer would
+    # read its backslashes as escapes.
+    r"|(?:^|\s)[\"']?(?:[a-z]:|\.{1,2})\\"
+)
+PS_DELETE = {"remove-item", "ri", "rm", "del", "erase", "rd", "rmdir"}
+PS_WRITE = {
+    "set-content",
+    "add-content",
+    "out-file",
+    "sc",
+    "ac",
+    "new-item",
+    "ni",
+    "copy-item",
+    "cpi",
+    "copy",
+    "move-item",
+    "mi",
+    "move",
+}
+PS_PATH_OPTIONS = ("-path", "-literalpath", "-filepath", "-destination")
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish"}
 INTERPRETERS = SHELLS | {"python", "python3", "perl", "ruby", "node", "eval", "source", "."}
 DOWNLOADERS = {"curl", "wget", "fetch"}
@@ -92,22 +136,36 @@ class Simple:
                 continue
             name = word.rsplit("/", 1)[-1]
             if name in WRAPPERS:
+                takes_value = WRAPPER_VALUE_OPTIONS.get(name, set())
                 index += 1
                 while index < len(self.words) and self.words[index].startswith("-"):
+                    option = self.words[index]
                     index += 1
+                    if option in takes_value and index < len(self.words):
+                        index += 1  # the option's value, not a command
                 continue
             return name, self.words[index + 1 :]
         return None, []
 
 
-def parse(command: str) -> list[Simple]:
+def _powershell_word(token: str) -> str:
+    """A PowerShell word as a path matcher sees it: quotes off, separators as '/'. The POSIX
+    lexer would read C:\\synthetic\\.ssh as escapes and lose every separator."""
+    if len(token) >= 2 and token[0] == token[-1] and token[0] in "'\"":
+        token = token[1:-1]
+    return token.replace("\\", "/")
+
+
+def parse(command: str, powershell: bool = False) -> list[Simple]:
     """Split a command line into simple commands, keeping redirections and list operators."""
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer = shlex.shlex(command, posix=not powershell, punctuation_chars=True)
     lexer.whitespace_split = True
     try:
         tokens = list(lexer)
     except ValueError as exc:
         raise GuardError(f"could not parse the command: {exc}") from exc
+    if powershell:
+        tokens = [_powershell_word(token) for token in tokens]
     simples: list[Simple] = []
     current = Simple()
     pending: str | None = None
@@ -217,6 +275,51 @@ def _dangerous(simple: Simple, raw: str) -> str | None:
     return None
 
 
+def _git_subcommand(arguments: Sequence[str]) -> str | None:
+    """The git subcommand past global options, including those that take a value (-C dir)."""
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument in GIT_VALUE_OPTIONS:
+            index += 2
+        elif argument.startswith("-"):
+            index += 1
+        else:
+            return argument
+    return None
+
+
+def _powershell_findings(simple: Simple) -> list[tuple[str, str]]:
+    """PowerShell's recursive delete and its writes to credential paths. Parameter names are
+    case-insensitive and may be abbreviated (-r, -Rec, -Recurse)."""
+    name, arguments = simple.command()
+    name = (name or "").lower()
+    findings: list[tuple[str, str]] = []
+    lowered = [argument.lower() for argument in arguments]
+    if name in PS_DELETE and any(
+        len(argument) >= 2 and "-recurse".startswith(argument) for argument in lowered
+    ):
+        findings.append(("dangerous command", f"{name} -Recurse deletes a whole tree"))
+    if name in PS_WRITE:
+        targets = []
+        index = 0
+        while index < len(arguments):
+            option = lowered[index]
+            if option.startswith("-") and any(p.startswith(option) for p in PS_PATH_OPTIONS):
+                if index + 1 < len(arguments):
+                    targets.append(arguments[index + 1])
+                index += 2
+                continue
+            if not option.startswith("-"):
+                targets.append(arguments[index])
+            index += 1
+        for target in targets:
+            if _matches(target, CREDENTIAL_WRITE_PATHS):
+                findings.append(("credential write", f"{name} writes {target}"))
+                break
+    return findings
+
+
 def _pipeline_findings(simples: Sequence[Simple]) -> list[tuple[str, str]]:
     """Judge each pipeline as a whole: what feeds a shell, and what a pipe would hide."""
     findings: list[tuple[str, str]] = []
@@ -245,7 +348,7 @@ def _pipeline_findings(simples: Sequence[Simple]) -> list[tuple[str, str]]:
             name, arguments = simple.command()
             if (
                 name == "git"
-                and _positional(arguments)[:1] == ["push"]
+                and _git_subcommand(arguments) == "push"
                 and position < len(pipeline) - 1
             ):
                 findings.append(
@@ -262,7 +365,8 @@ def judge_command(command: str) -> list[tuple[str, str]]:
     """Every (class, reason) the command triggers; empty means admitted."""
     if FORK_BOMB.search(command):
         return [("dangerous command", "a fork bomb")]
-    simples = parse(command)
+    powershell = bool(POWERSHELL.search(command))
+    simples = parse(command, powershell=powershell)
     findings: list[tuple[str, str]] = []
     for simple in simples:
         for label, judge in (
@@ -275,6 +379,8 @@ def judge_command(command: str) -> list[tuple[str, str]]:
         reason = _dangerous(simple, command)
         if reason:
             findings.append(("dangerous command", reason))
+        if powershell:
+            findings.extend(_powershell_findings(simple))
     findings.extend(_pipeline_findings(simples))
     return findings
 

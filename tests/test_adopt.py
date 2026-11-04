@@ -246,6 +246,71 @@ class AdoptionTests(unittest.TestCase):
         self.assertEqual(result, 2)
         self.assertIn("may not contain", stderr)
 
+    def test_a_conflicting_guard_refuses_before_any_write(self) -> None:
+        """Repair audit 2026-11-03: a different .agent-tools/command_guard.py was kept, the
+        settings hooks were wired to it anyway, and adopt exited 0."""
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
+            project = Path(directory) / "proj"
+            (project / ".agent-tools").mkdir(parents=True)
+            theirs = project / ".agent-tools" / "command_guard.py"
+            theirs.write_text("# someone else's guard\n", encoding="utf-8")
+            args = ("--into", str(project), "--tool", "claude-code")
+            preview, stdout, _stderr = self.run_adopt(*args)
+            self.assertEqual(preview, 2)
+            self.assertIn("CONFLICT", stdout)
+            result, _stdout, stderr = self.run_adopt(*args, "--execute")
+            self.assertEqual(result, 2)
+            self.assertIn("Nothing was written", stderr)
+            self.assertEqual(theirs.read_text(encoding="utf-8"), "# someone else's guard\n")
+            self.assertEqual(
+                sorted(str(p.relative_to(project)) for p in project.rglob("*")),
+                [".agent-tools", ".agent-tools/command_guard.py"],
+            )
+
+    def test_record_check_update_and_uninstall(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
+            project = Path(directory) / "proj"
+            (project / ".claude").mkdir(parents=True)
+            settings_path = project / ".claude" / "settings.json"
+            original = json.dumps({"model": "my-model"})
+            settings_path.write_text(original, encoding="utf-8")
+            args = ("--into", str(project), "--tool", "claude-code", "--platform", "posix")
+            self.assertEqual(self.run_adopt(*args, "--execute")[0], 0)
+            record_path = project / adopt.RECORD_REL
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            self.assertIn(".agent-tools/command_guard.py", record["files"])
+            self.assertEqual(record["settings"]["backup"], "settings.json.sysops-pub.bak")
+            self.assertEqual(self.run_adopt("--into", str(project), "--check")[0], 0)
+
+            # An update replaces our own unchanged file; a file the owner changed is drift.
+            guard = project / ".agent-tools" / "scope_guard.py"
+            guard.write_text("# stale copy from an earlier adoption\n", encoding="utf-8")
+            record["files"][".agent-tools/scope_guard.py"] = hashlib.sha256(
+                guard.read_bytes()
+            ).hexdigest()
+            record_path.write_text(json.dumps(record), encoding="utf-8")
+            result, stdout, stderr = self.run_adopt(*args, "--execute")
+            self.assertEqual(result, 0, stderr)
+            self.assertIn("UPDATED .agent-tools/scope_guard.py", stdout)
+            (project / "CLAUDE.md").write_text("edited by the owner\n", encoding="utf-8")
+            result, stdout, _stderr = self.run_adopt("--into", str(project), "--check")
+            self.assertEqual(result, 1)
+            self.assertIn("DRIFTED  CLAUDE.md", stdout)
+
+            # Uninstall removes only what is still ours and restores the settings backup.
+            result, stdout, _stderr = self.run_adopt(
+                "--into", str(project), "--uninstall", "--execute"
+            )
+            self.assertEqual(result, 1)
+            self.assertIn("KEEP     CLAUDE.md", stdout)
+            self.assertEqual(
+                (project / "CLAUDE.md").read_text(encoding="utf-8"), "edited by the owner\n"
+            )
+            self.assertFalse((project / ".agent-tools" / "command_guard.py").exists())
+            self.assertEqual(settings_path.read_text(encoding="utf-8"), original)
+            self.assertFalse(record_path.exists())
+            self.assertEqual(self.run_adopt("--into", str(project), "--uninstall")[0], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

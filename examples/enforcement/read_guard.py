@@ -19,12 +19,14 @@ has not seen; it is not a defense against a hostile one.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import getpass
 import hashlib
 import json
 import os
 import sys
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 STATE_ENVIRONMENT = "SYSOPS_PUB_GUARD_STATE"
@@ -39,8 +41,37 @@ class GuardError(ValueError):
 def _state_directory(explicit: str | None) -> Path:
     raw = explicit or os.environ.get(STATE_ENVIRONMENT)
     if raw:
-        return Path(raw).expanduser()
-    return Path(tempfile.gettempdir()) / "sysops-pub-read-guard"
+        directory = Path(raw).expanduser()
+    else:
+        # One private directory per user, not one shared, guessable path in the temp directory that
+        # another user could create first (repair audit 2026-11-03).
+        directory = Path(tempfile.gettempdir()) / f"sysops-pub-read-guard-{getpass.getuser()}"
+    if directory.is_symlink():
+        raise GuardError(f"state directory is a symlink: {directory}")
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if hasattr(os, "getuid") and directory.stat().st_uid != os.getuid():
+        raise GuardError(f"state directory belongs to another user: {directory}")
+    return directory
+
+
+@contextlib.contextmanager
+def _locked(path: Path) -> Iterator[None]:
+    """Hold an exclusive lock on the session's state for one load-modify-save, so two hooks
+    firing together cannot each save a snapshot that drops the other's record."""
+    lock = path.with_name(path.name + ".lock")
+    handle = os.open(lock, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(handle, msvcrt.LK_LOCK, 1)  # type: ignore[attr-defined]  # Windows only
+        else:
+            import fcntl
+
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(handle)
 
 
 def _state_path(directory: Path, session: str) -> Path:
@@ -68,10 +99,17 @@ def _load_state(path: Path) -> dict[str, object]:
 
 
 def _save_state(path: Path, value: dict[str, object]) -> None:
+    """A private, unpredictable temporary file and an atomic rename. The fixed `.name.tmp` it
+    replaces followed a planted symlink and overwrote its target (repair audit 2026-11-03)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    handle, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(value, indent=2, sort_keys=True) + "\n")
+        os.replace(temporary, path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
 
 
 def _digest(path: Path) -> str | None:
@@ -93,6 +131,17 @@ def _resolved(raw: str) -> str:
 
 def record(state_path: Path, file_path: str) -> str:
     """Remember the file as read; clear any stale block on it."""
+    with _locked(state_path):
+        return _record(state_path, file_path)
+
+
+def check(state_path: Path, file_path: str) -> tuple[bool, str]:
+    """Allow the edit only if the file was read this session and is unchanged since."""
+    with _locked(state_path):
+        return _check(state_path, file_path)
+
+
+def _record(state_path: Path, file_path: str) -> str:
     state = _load_state(state_path)
     key = _resolved(file_path)
     digest = _digest(Path(key))
@@ -109,8 +158,7 @@ def record(state_path: Path, file_path: str) -> str:
     return f"recorded {key}"
 
 
-def check(state_path: Path, file_path: str) -> tuple[bool, str]:
-    """Allow the edit only if the file was read this session and is unchanged since."""
+def _check(state_path: Path, file_path: str) -> tuple[bool, str]:
     state = _load_state(state_path)
     key = _resolved(file_path)
     reads = state["reads"]

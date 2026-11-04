@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
-"""Preview, install, or verify this clone's mandatory local pre-push gate.
+"""Preview, install, verify or remove this clone's mandatory local pre-push gate.
 
 The gate needs the commands that pyproject.toml lists under [tool.sysops_pub.gate] as tools on
 PATH; without a declaration it needs this repository's four, Black, Ruff, gitleaks and ShellCheck.
+
+Installing points core.hooksPath at .githooks. That replaces whatever ran Git hooks before: another
+core.hooksPath, or the active hooks in .git/hooks, which Git stops running once core.hooksPath is
+set. So bootstrap detects both and refuses to take them over unless told to
+(--replace-existing-hooks), records what it replaced in an install record inside .git, and
+--uninstall puts that back exactly.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import shutil
 import subprocess
 import sys
 import tomllib
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +30,7 @@ HOOKS_PATH = ".githooks"
 PRE_PUSH = REPO_ROOT / HOOKS_PATH / "pre-push"
 GATE_TABLE = ("tool", "sysops_pub", "gate")
 DEFAULT_RELEASE_TOOLS = ("black", "ruff", "gitleaks", "shellcheck")
+RECORD_NAME = "sysops-pub-bootstrap.json"
 
 
 class BootstrapError(RuntimeError):
@@ -61,12 +71,42 @@ def _git_config(*arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def verify() -> None:
+def _git_dir() -> Path:
+    result = _git_config("rev-parse", "--git-common-dir")
+    if result.returncode:
+        raise BootstrapError("not inside a Git clone")
+    directory = Path(result.stdout.strip())
+    return directory if directory.is_absolute() else REPO_ROOT / directory
+
+
+def current_hooks_path() -> str | None:
     result = _git_config("config", "--local", "--get", "core.hooksPath")
-    if result.returncode or result.stdout.strip() != HOOKS_PATH:
-        actual = result.stdout.strip() or "unset"
+    return result.stdout.strip() or None if result.returncode == 0 else None
+
+
+def active_default_hooks() -> list[str]:
+    """Hooks in .git/hooks that Git runs today: not samples, and executable where that applies."""
+    hooks = _git_dir() / "hooks"
+    if not hooks.is_dir():
+        return []
+    return sorted(
+        path.name
+        for path in hooks.iterdir()
+        if path.is_file()
+        and not path.name.endswith(".sample")
+        and (os.name == "nt" or os.access(path, os.X_OK))
+    )
+
+
+def _record_path() -> Path:
+    return _git_dir() / RECORD_NAME
+
+
+def verify() -> None:
+    actual = current_hooks_path()
+    if actual != HOOKS_PATH:
         raise BootstrapError(
-            f"core.hooksPath must be {HOOKS_PATH!r}; current local value is {actual!r}"
+            f"core.hooksPath must be {HOOKS_PATH!r}; current local value is {actual or 'unset'!r}"
         )
     if not PRE_PUSH.is_file():
         raise BootstrapError(f"tracked pre-push hook is missing: {PRE_PUSH}")
@@ -77,11 +117,75 @@ def verify() -> None:
         raise BootstrapError("mandatory release tool(s) are unavailable: " + ", ".join(missing))
 
 
+def install(replace: bool) -> None:
+    previous, active = current_hooks_path(), active_default_hooks()
+    if previous == HOOKS_PATH:
+        verify()
+        print("bootstrap: already installed; verified")
+        return
+    owned = f"core.hooksPath {previous!r}" if previous else None
+    if active and not previous:
+        owned = f"the active hook(s) in .git/hooks ({', '.join(active)})"
+    if owned and not replace:
+        raise BootstrapError(
+            f"this clone's Git hooks already run through {owned}; installing would stop them. "
+            "Wire .githooks/pre-push into that setup yourself, or re-run with "
+            "--replace-existing-hooks to take over (--uninstall restores it)."
+        )
+    record = {
+        "installed_at": datetime.now(UTC).isoformat(),
+        "installed_hooks_path": HOOKS_PATH,
+        "pre_push_sha256": hashlib.sha256(PRE_PUSH.read_bytes()).hexdigest(),
+        "previous_hooks_path": previous,
+        "previous_active_hooks": active,
+    }
+    record_path = _record_path()
+    temporary = record_path.with_name(f".{RECORD_NAME}.{os.getpid()}")
+    temporary.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, record_path)
+    result = _git_config("config", "--local", "core.hooksPath", HOOKS_PATH)
+    if result.returncode:
+        record_path.unlink(missing_ok=True)
+        detail = result.stderr.strip() or f"git config returned {result.returncode}"
+        raise BootstrapError(detail)
+    verify()
+
+
+def uninstall() -> None:
+    """Put back exactly what the install record says was there before."""
+    record_path = _record_path()
+    if not record_path.is_file():
+        raise BootstrapError(f"no install record at {record_path}; nothing of ours to remove")
+    try:
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise BootstrapError(f"install record is unreadable: {exc}") from exc
+    if current_hooks_path() != record.get("installed_hooks_path"):
+        raise BootstrapError(
+            f"core.hooksPath is now {current_hooks_path() or 'unset'!r}, not what bootstrap "
+            "installed; someone else changed it since, so it is left alone"
+        )
+    previous = record.get("previous_hooks_path")
+    args = ("core.hooksPath", previous) if previous else ("--unset", "core.hooksPath")
+    result = _git_config("config", "--local", *args)
+    if result.returncode:
+        raise BootstrapError(result.stderr.strip() or "git config failed")
+    record_path.unlink()
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--execute", action="store_true", help="Install and verify the local gate")
     mode.add_argument("--check", action="store_true", help="Verify the local gate without writing")
+    mode.add_argument(
+        "--uninstall", action="store_true", help="Restore the hook setup bootstrap replaced"
+    )
+    parser.add_argument(
+        "--replace-existing-hooks",
+        action="store_true",
+        help="Take over from an existing core.hooksPath or active .git/hooks (recorded)",
+    )
     return parser
 
 
@@ -92,6 +196,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             verify()
             print("bootstrap: mandatory local pre-push gate is wired")
             return 0
+        if args.uninstall:
+            uninstall()
+            print("bootstrap: removed; the previous hook setup is restored")
+            return 0
         if not PRE_PUSH.is_file():
             raise BootstrapError(f"tracked pre-push hook is missing: {PRE_PUSH}")
         missing = _missing_release_tools()
@@ -99,6 +207,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("MISSING mandatory release tool(s): " + ", ".join(missing))
         else:
             print("READY mandatory release tools: " + (", ".join(release_tools()) or "none"))
+        previous, active = current_hooks_path(), active_default_hooks()
+        if previous and previous != HOOKS_PATH:
+            print(f"EXISTING core.hooksPath {previous!r} would be replaced")
+        elif active and not previous:
+            print("EXISTING active .git/hooks would stop running: " + ", ".join(active))
         print(f"WOULD SET git config --local core.hooksPath {HOOKS_PATH}")
         if not args.execute:
             print("dry-run only: pass --execute to install the local gate")
@@ -108,11 +221,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "install the mandatory release tools before executing bootstrap: "
                 + ", ".join(missing)
             )
-        result = _git_config("config", "--local", "core.hooksPath", HOOKS_PATH)
-        if result.returncode:
-            detail = result.stderr.strip() or f"git config returned {result.returncode}"
-            raise BootstrapError(detail)
-        verify()
+        install(args.replace_existing_hooks)
         print("bootstrap: mandatory local pre-push gate installed and verified")
         return 0
     except BootstrapError as exc:

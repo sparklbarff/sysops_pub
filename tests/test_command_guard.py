@@ -120,6 +120,40 @@ class CommandGuardJudgementTests(unittest.TestCase):
         self.assertIn("dangerous command", _classes("FOO=1 env BAR=2 rm -rf x"))
         self.assertIn("credential read", _classes("nohup cat ~/.ssh/id_rsa"))
 
+    def test_wrapper_options_with_values_and_git_globals_do_not_hide_it(self) -> None:
+        """Repair audit 2026-11-03: these wrapped forms evaded their plain-command controls."""
+        self.assertIn("dangerous command", _classes("env -u SYNTHETIC rm -rf ./synthetic-tree"))
+        self.assertIn("dangerous command", _classes("sudo -u travis rm -rf /tmp/x"))
+        self.assertEqual(_classes("env -u SYNTHETIC ls -la"), set())
+        self.assertIn("masked push", _classes("git -C ./synthetic push origin main | cat"))
+        self.assertIn("masked push", _classes("git -c a.b=c push origin main | tail -1"))
+        self.assertEqual(_classes("git -C ./synthetic status | cat"), set())
+        self.assertEqual(_classes("git -C ./synthetic push origin main"), set())
+
+    def test_powershell_forms_are_judged_like_their_posix_ones(self) -> None:
+        """Repair audit 2026-11-03: delete, key read and environment write all passed."""
+        cases = {
+            "Remove-Item -Recurse -Force .\\synthetic-tree": "dangerous command",
+            "ri -r .\\synthetic-tree": "dangerous command",
+            "Remove-Item -rec C:\\work\\build": "dangerous command",
+            "Get-Content C:\\synthetic\\.ssh\\id_ed25519": "credential read",
+            "type C:\\synthetic\\.aws\\credentials": "credential read",
+            "Set-Content -Path .env -Value synthetic": "credential write",
+            "Out-File -FilePath .env.staging": "credential write",
+            "Copy-Item key.pub C:\\synthetic\\.ssh\\authorized_keys": "credential write",
+        }
+        for command, label in cases.items():
+            with self.subTest(command=command):
+                self.assertIn(label, _classes(command))
+        for command in (
+            "Remove-Item .\\one.txt",
+            "Get-Content .\\README.md",
+            "Set-Content -Path notes.txt -Value x",
+            "Copy-Item a.json b.json",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(_classes(command), set())
+
     def test_unparsable_commands_are_refused_not_guessed(self) -> None:
         with self.assertRaisesRegex(command_guard.GuardError, "could not parse"):
             command_guard.judge_command("echo 'unterminated")

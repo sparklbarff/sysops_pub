@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -48,7 +49,69 @@ class ReadGuardTests(unittest.TestCase):
             admitted = self.run_guard(state, "check", edit)
             self.assertEqual(admitted.returncode, 0, admitted.stderr)
             self.assertIn("ALLOWED", admitted.stdout)
-            self.assertEqual(list(state.iterdir()), [state / f"{SESSION}.json"])
+            self.assertEqual(
+                sorted(state.iterdir()),
+                [state / f"{SESSION}.json", state / f"{SESSION}.json.lock"],
+            )
+
+    def test_a_planted_symlink_is_never_followed(self) -> None:
+        """Repair audit 2026-11-03: the fixed `.name.tmp` path followed a symlink and overwrote
+        the sentinel behind it."""
+        with tempfile.TemporaryDirectory(prefix="read-guard-") as directory:
+            state = Path(directory) / "state"
+            state.mkdir()
+            sentinel = Path(directory) / "sentinel.txt"
+            sentinel.write_text("keep me\n", encoding="utf-8")
+            (state / f".{SESSION}.json.tmp").symlink_to(sentinel)
+            target = Path(directory) / "notes.md"
+            target.write_text("one\n", encoding="utf-8")
+            read = {"tool_name": "Read", "tool_input": {"file_path": str(target)}}
+            self.assertEqual(self.run_guard(state, "record", read).returncode, 0)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep me\n")
+            self.assertFalse((state / f"{SESSION}.json").is_symlink())
+
+    def record_process(self, state: Path, path: Path) -> subprocess.Popen[bytes]:
+        return subprocess.Popen(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "record",
+                "--state-dir",
+                str(state),
+                "--session",
+                SESSION,
+                "--path",
+                str(path),
+            ],
+            stdout=subprocess.DEVNULL,
+        )
+
+    def test_a_record_waits_for_the_session_lock(self) -> None:
+        """Repair audit 2026-11-03: two updates from stale snapshots kept only one record. Each
+        load-modify-save now holds the session's lock, so a second writer waits for the first."""
+        with tempfile.TemporaryDirectory(prefix="read-guard-") as directory:
+            state = Path(directory) / "state"
+            state.mkdir()
+            target = Path(directory) / "a.md"
+            target.write_text("x\n", encoding="utf-8")
+            with read_guard._locked(state / f"{SESSION}.json"):
+                waiting = self.record_process(state, target)
+                time.sleep(1.0)
+                self.assertIsNone(waiting.poll(), "record ran while another held the lock")
+            self.assertEqual(waiting.wait(timeout=30), 0)
+
+    def test_concurrent_records_all_survive(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="read-guard-") as directory:
+            state = Path(directory) / "state"
+            state.mkdir()
+            first, second = Path(directory) / "a.md", Path(directory) / "b.md"
+            for path in (first, second):
+                path.write_text("x\n", encoding="utf-8")
+            processes = [self.record_process(state, path) for path in (first, second) * 10]
+            for process in processes:
+                self.assertEqual(process.wait(timeout=60), 0)
+            reads = json.loads((state / f"{SESSION}.json").read_text(encoding="utf-8"))["reads"]
+            self.assertEqual(set(reads), {str(first.resolve()), str(second.resolve())})
 
     def test_a_file_changed_since_the_read_is_stale_until_read_again(self) -> None:
         with tempfile.TemporaryDirectory(prefix="read-guard-") as directory:

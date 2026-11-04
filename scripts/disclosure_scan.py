@@ -8,7 +8,7 @@ import json
 import re
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWLIST_PATH = ROOT / "scripts" / "disclosure_allowlist.json"
@@ -128,8 +128,17 @@ def _hash_bound_entries(value: object, label: str) -> dict[str, dict[str, str]]:
         reason = entry["reason"]
         if not all(isinstance(item, str) and item for item in (path, sha256, reason)):
             raise ScanError(f"{label} path, sha256, and reason must be non-empty strings")
-        relative = Path(path)
-        if relative.is_absolute() or ".." in relative.parts or str(relative) != path:
+        # Git names files with '/', on every platform. Judging the entry with the native Path made
+        # Windows turn 'site/fonts/chivo.woff2' into a backslashed string that failed its own
+        # equality test (repair audit 2026-11-03). A backslash or drive letter is still refused.
+        relative = PurePosixPath(path)
+        if (
+            relative.is_absolute()
+            or ".." in relative.parts
+            or str(relative) != path
+            or "\\" in path
+            or re.match(r"[A-Za-z]:", path)
+        ):
             raise ScanError(f"{label} path must be an exact safe relative path: {path!r}")
         if not re.fullmatch(r"[0-9a-f]{64}", sha256):
             raise ScanError(f"{label} sha256 must be lowercase hexadecimal: {path}")
@@ -174,7 +183,7 @@ def scan() -> list[str]:
     seen_omissions: set[str] = set()
     for path in _tracked_files():
         relative = path.relative_to(ROOT)
-        relative_string = str(relative)
+        relative_string = relative.as_posix()  # the allowlist's (Git's) form on every platform
         lowered_parts = [part.casefold() for part in relative.parts]
         omission_reasons: list[str] = []
         if any(part in OMISSION_NAMES for part in lowered_parts):
@@ -226,7 +235,7 @@ def scan() -> list[str]:
         for label, pattern in TEXT_PATTERNS.items():
             for match in pattern.finditer(text):
                 line = text.count("\n", 0, match.start()) + 1
-                finding = f"{relative}:{line}: {label}"
+                finding = f"{relative_string}:{line}: {label}"
                 seen_findings.add(finding)
                 if finding not in allowlist:
                     findings.append(finding)

@@ -11,6 +11,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Iterator, Sequence
@@ -90,9 +91,20 @@ def _safe_receipt(raw: str | Path) -> Path:
 
 
 def _write_receipt(path: Path, value: dict[str, object]) -> None:
-    temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    """Write the whole receipt to a private, unpredictable temporary file, then publish it with a
+    hard link, which fails rather than overwrite anything already at the path and never follows a
+    symlink there. The fixed `.name.tmp` it replaces followed a planted symlink and overwrote the
+    sentinel behind it (repair audit 2026-11-03)."""
+    handle, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(value, indent=2, sort_keys=True) + "\n")
+        try:
+            os.link(temporary, path)
+        except FileExistsError as exc:
+            raise ManagedJobError(f"refusing to overwrite receipt: {path}") from exc
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 SETTLE_SECONDS = 0.5
