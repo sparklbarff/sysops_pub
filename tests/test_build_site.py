@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -8,11 +9,15 @@ import tempfile
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import build_site
+
+# The recorded sessions replay POSIX shell steps; on Windows the build refuses (support boundary).
+POSIX_SESSIONS = "recorded sessions run POSIX shell steps; the manual is built on macOS or Linux"
 
 COMMIT = build_site.Commit(
     sha="0123456789abcdef0123456789abcdef01234567", date="2026-10-02", clean=True
@@ -301,6 +306,7 @@ class IdentityTests(unittest.TestCase):
                 self.assertEqual((page.name, flag) in found, not text)
 
 
+@unittest.skipIf(os.name == "nt", POSIX_SESSIONS)
 class SessionTests(unittest.TestCase):
     """The recorded sessions are real runs in a fresh clone, and publish no host paths."""
 
@@ -355,6 +361,14 @@ class BuildTests(unittest.TestCase):
             with self.assertRaises(build_site.BuildError):
                 build_site._check_output_target(Path(directory))
 
+    def test_windows_refuses_to_record_sessions_instead_of_half_building(self) -> None:
+        with (
+            mock.patch.object(build_site.os, "name", "nt"),
+            self.assertRaisesRegex(build_site.BuildError, "POSIX shell steps"),
+        ):
+            build_site.record_sessions(COMMIT)
+
+    @unittest.skipIf(os.name == "nt", POSIX_SESSIONS)
     def test_draft_build_is_complete_self_consistent_and_free_of_inline_styles(self) -> None:
         with tempfile.TemporaryDirectory(prefix="site-build-") as directory:
             output = Path(directory) / "out"

@@ -760,6 +760,12 @@ def record_sessions(commit: Commit) -> dict[str, list[Exchange]]:
     replaced with /tmp/session and the result must pass the repository's own disclosure
     patterns; a match fails the build rather than publishing it.
     """
+    if os.name == "nt":
+        # A support boundary, not a skip: the sessions show POSIX shell steps (mkdir, cat) as a
+        # reader types them, and Windows has no cat (native acceptance, 2026-11-04).
+        raise BuildError(
+            "recorded sessions run POSIX shell steps; build the manual on macOS or Linux"
+        )
     patterns = _disclosure_patterns()
     recorded: dict[str, list[Exchange]] = {}
     with tempfile.TemporaryDirectory(prefix="sysops-pub-sessions-") as directory:
@@ -788,15 +794,6 @@ def record_sessions(commit: Commit) -> dict[str, list[Exchange]]:
             "PYTHONUTF8": "1",
             "COLUMNS": str(MAN_WIDTH),
         }
-        if os.name == "nt":
-            # Windows finds the home directory through USERPROFILE, not HOME, and Python needs
-            # SYSTEMROOT to start its own subprocesses.
-            environment.update(
-                USERPROFILE=str(root),
-                SYSTEMROOT=os.environ.get("SYSTEMROOT", r"C:\Windows"),
-                TEMP=str(scratch),
-                TMP=str(scratch),
-            )
         for name, steps in SESSIONS.items():
             exchanges = []
             for step in steps:
