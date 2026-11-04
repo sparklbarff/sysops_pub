@@ -788,6 +788,15 @@ def record_sessions(commit: Commit) -> dict[str, list[Exchange]]:
             "PYTHONUTF8": "1",
             "COLUMNS": str(MAN_WIDTH),
         }
+        if os.name == "nt":
+            # Windows finds the home directory through USERPROFILE, not HOME, and Python needs
+            # SYSTEMROOT to start its own subprocesses.
+            environment.update(
+                USERPROFILE=str(root),
+                SYSTEMROOT=os.environ.get("SYSTEMROOT", r"C:\Windows"),
+                TEMP=str(scratch),
+                TMP=str(scratch),
+            )
         for name, steps in SESSIONS.items():
             exchanges = []
             for step in steps:

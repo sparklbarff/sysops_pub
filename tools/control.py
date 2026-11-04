@@ -249,7 +249,7 @@ def _managed_files(
                     source=source,
                     destination=destination,
                     destination_root=destination_root,
-                    relative_destination=str(destination.relative_to(target)),
+                    relative_destination=destination.relative_to(target).as_posix(),
                 )
             )
         if component_file_count == 0:
@@ -309,7 +309,7 @@ def _unmanaged_states(files: Sequence[ManagedFile], target: Path) -> list[FileSt
             states.append(
                 FileState(
                     component=component,
-                    path=str(candidate.relative_to(target)),
+                    path=candidate.relative_to(target).as_posix(),
                     status="unmanaged",
                     expected_sha256=None,
                     actual_sha256=actual,

@@ -263,7 +263,7 @@ class AdoptionTests(unittest.TestCase):
             self.assertIn("Nothing was written", stderr)
             self.assertEqual(theirs.read_text(encoding="utf-8"), "# someone else's guard\n")
             self.assertEqual(
-                sorted(str(p.relative_to(project)) for p in project.rglob("*")),
+                sorted(p.relative_to(project).as_posix() for p in project.rglob("*")),
                 [".agent-tools", ".agent-tools/command_guard.py"],
             )
 

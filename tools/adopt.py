@@ -142,7 +142,7 @@ def _build_bundle(target: Path, sources: list[tuple[Path, Path]]) -> None:
             raise AdoptionError("staged bundle file set does not match the declared sources")
         for source, relative in sources:
             if _sha256(source) != _sha256(staging / relative):
-                raise AdoptionError(f"staged bundle hash mismatch: {relative}")
+                raise AdoptionError(f"staged bundle hash mismatch: {relative.as_posix()}")
         staging.replace(target)
 
 
@@ -350,15 +350,17 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
             settings_action = "place"
 
     for action, rel in actions:
-        print(f"{'WOULD ' if not execute else ''}{action.upper():20} {rel}")
+        print(f"{'WOULD ' if not execute else ''}{action.upper():20} {rel.as_posix()}")
     if settings_action is not None:
         print(
-            f"{'WOULD ' if not execute else ''}{('settings-' + settings_action).upper():20} {SETTINGS_REL}"
+            f"{'WOULD ' if not execute else ''}{('settings-' + settings_action).upper():20} {SETTINGS_REL.as_posix()}"
         )
     if conflicts:
         message = (
             "a different file already sits where the installed hooks would run this tool's "
-            "guard: " + ", ".join(str(rel) for rel in conflicts) + ". Rename or merge it, then "
+            "guard: "
+            + ", ".join(rel.as_posix() for rel in conflicts)
+            + ". Rename or merge it, then "
             "adopt again."
         )
         if execute:
@@ -381,7 +383,7 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
         _project_destination(project, rel)
         _atomic_write(destination, source.read_bytes())
         owned[rel.as_posix()] = _sha256(destination)
-        print(f"{'UPDATED' if action == 'update' else 'PLACED'} {rel}")
+        print(f"{'UPDATED' if action == 'update' else 'PLACED'} {rel.as_posix()}")
     settings_record = dict(record.get("settings") or {})
     if settings_source is not None:
         settings_dest = _project_destination(project, SETTINGS_REL)
@@ -396,15 +398,15 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
                     shutil.copyfile(settings_dest, backup)
                     settings_record.setdefault("backup", backup.name)
                 _atomic_write(settings_dest, (json.dumps(merged, indent=2) + "\n").encode())
-                print(f"MERGED {SETTINGS_REL} (backup {backup.name})")
+                print(f"MERGED {SETTINGS_REL.as_posix()} (backup {backup.name})")
             else:
-                print(f"UNCHANGED {SETTINGS_REL}")
+                print(f"UNCHANGED {SETTINGS_REL.as_posix()}")
         else:
             settings_dest.parent.mkdir(parents=True, exist_ok=True)
             _project_destination(project, SETTINGS_REL)
             _atomic_write(settings_dest, settings_source.read_bytes())
             settings_record["placed"] = True
-            print(f"PLACED {SETTINGS_REL}")
+            print(f"PLACED {SETTINGS_REL.as_posix()}")
         settings_record["sha256"] = _sha256(settings_dest)
     record.update(
         source_commit=_source_commit(),
@@ -412,10 +414,10 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
         platform=platform,
         files=owned,
         settings=settings_record,
-        skipped=[str(rel) for action, rel in actions if action == "present-differs-skip"],
+        skipped=[rel.as_posix() for action, rel in actions if action == "present-differs-skip"],
     )
     _write_record(project, record)
-    print(f"RECORDED {RECORD_REL}")
+    print(f"RECORDED {RECORD_REL.as_posix()}")
     return 0
 
 
@@ -435,7 +437,7 @@ def _check(project: Path) -> int:
         path = _project_destination(project, SETTINGS_REL)
         same = path.exists() and _sha256(path) == settings["sha256"]
         drift += not same
-        print(f"{'OK' if same else 'DRIFTED':8} {SETTINGS_REL}")
+        print(f"{'OK' if same else 'DRIFTED':8} {SETTINGS_REL.as_posix()}")
     print(f"adopted from {record.get('source_commit', 'unknown')}; {drift} drifted")
     return 1 if drift else 0
 
@@ -464,14 +466,14 @@ def _uninstall(project: Path, execute: bool) -> int:
     if settings.get("sha256") and settings_path.exists():
         if _sha256(settings_path) != settings["sha256"]:
             kept += 1
-            print(f"KEEP     {SETTINGS_REL} (changed since adoption)")
+            print(f"KEEP     {SETTINGS_REL.as_posix()} (changed since adoption)")
         elif settings.get("placed"):
-            print(f"{prefix}REMOVE {SETTINGS_REL}")
+            print(f"{prefix}REMOVE {SETTINGS_REL.as_posix()}")
             if execute:
                 settings_path.unlink()
         elif settings.get("backup"):
             backup = settings_path.with_name(settings["backup"])
-            print(f"{prefix}RESTORE {SETTINGS_REL} from {backup.name}")
+            print(f"{prefix}RESTORE {SETTINGS_REL.as_posix()} from {backup.name}")
             if execute:
                 os.replace(backup, settings_path)
     if execute:
@@ -543,7 +545,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise AdoptionError("missing or unsafe source file(s): " + ", ".join(missing))
 
         for source, relative in sources:
-            print(f"{'COPY' if args.execute else 'WOULD COPY':10} {relative}")
+            print(f"{'COPY' if args.execute else 'WOULD COPY':10} {relative.as_posix()}")
         if not args.execute:
             print("dry-run only: pass --execute to build the bundle")
         else:

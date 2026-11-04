@@ -199,22 +199,24 @@ def scan() -> list[str]:
             try:
                 resolved.relative_to(ROOT)
             except ValueError:
-                findings.append(f"{relative}: symlink escapes repository -> {resolved}")
+                findings.append(f"{relative_string}: symlink escapes repository -> {resolved}")
             continue
         try:
             content = path.read_bytes()
         except OSError as exc:
-            findings.append(f"{relative}: could not read tracked file: {exc}")
+            findings.append(f"{relative_string}: could not read tracked file: {exc}")
             continue
         if omission_reasons:
             omission_entry = omission_allowlist.get(relative_string)
             if omission_entry is None:
-                findings.extend(f"{relative}: {reason} is tracked" for reason in omission_reasons)
+                findings.extend(
+                    f"{relative_string}: {reason} is tracked" for reason in omission_reasons
+                )
             else:
                 seen_omissions.add(relative_string)
                 actual_sha256 = hashlib.sha256(content).hexdigest()
                 if actual_sha256 != omission_entry["sha256"]:
-                    findings.append(f"{relative}: omission allowlist SHA-256 mismatch")
+                    findings.append(f"{relative_string}: omission allowlist SHA-256 mismatch")
         try:
             text = content.decode("utf-8")
         except UnicodeDecodeError:
@@ -222,16 +224,18 @@ def scan() -> list[str]:
         if text is None or not _is_text(text):
             binary_entry = binary_allowlist.get(relative_string)
             if binary_entry is None:
-                findings.append(f"{relative}: non-text file is not binary-allowlisted")
+                findings.append(f"{relative_string}: non-text file is not binary-allowlisted")
                 continue
             seen_binaries.add(relative_string)
             actual_sha256 = hashlib.sha256(content).hexdigest()
             if actual_sha256 != binary_entry["sha256"]:
-                findings.append(f"{relative}: binary allowlist SHA-256 mismatch")
+                findings.append(f"{relative_string}: binary allowlist SHA-256 mismatch")
             continue
         if relative_string in binary_allowlist:
             seen_binaries.add(relative_string)
-            findings.append(f"{relative}: binary allowlist entry points to a UTF-8 text file")
+            findings.append(
+                f"{relative_string}: binary allowlist entry points to a UTF-8 text file"
+            )
         for label, pattern in TEXT_PATTERNS.items():
             for match in pattern.finditer(text):
                 line = text.count("\n", 0, match.start()) + 1

@@ -50,7 +50,21 @@ class Run:
         return ok
 
 
-def sh(args: list[str], cwd: Path, timeout: float = 120) -> subprocess.CompletedProcess[str]:
+def sh(
+    args: list[str], cwd: Path, timeout: float = 120, capture: bool = True
+) -> subprocess.CompletedProcess[str]:
+    """capture=False for jobs whose children may outlive them: a survivor holding the output
+    pipe open would turn a failed case into a hang."""
+    if not capture:
+        return subprocess.run(
+            args,
+            cwd=cwd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
     return subprocess.run(
         args, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False
     )
@@ -275,6 +289,7 @@ def process_cases(run: Run, clone: Path, work: Path) -> None:
             "pass",
         ],
         work,
+        capture=False,
     )
     run.case(
         "managed job: a clean job exits 0 with a receipt",
@@ -298,6 +313,7 @@ def process_cases(run: Run, clone: Path, work: Path) -> None:
         ],
         work,
         timeout=60,
+        capture=False,
     )
     tree_gone, state = tree_state(wait_for(pidfile, 1))
     run.case(
@@ -321,6 +337,7 @@ def process_cases(run: Run, clone: Path, work: Path) -> None:
         ],
         work,
         timeout=60,
+        capture=False,
     )
     tree_gone, state = tree_state(wait_for(pidfile, 1))
     run.case(
@@ -344,8 +361,8 @@ def process_cases(run: Run, clone: Path, work: Path) -> None:
             "60",
         ],
         cwd=work,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
     )
     pids = wait_for(pidfile)
