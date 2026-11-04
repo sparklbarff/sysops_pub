@@ -4,8 +4,8 @@
 Git runs the pre-push hook with the destination remote's name and location as arguments and names
 each ref's local and remote object IDs on stdin. Every commit the push would publish to that
 destination is listed, oldest first: a commit is excluded only when the destination already has it,
-by the ref's current value there or the destination's own remote-tracking refs, never because some
-other remote has it. Each listed commit is checked out detached into a temporary worktree and
+by the ref's current value there or, when the push goes to the remote's own fetch URL, that
+remote's tracking refs; never because another remote, or the same remote's fetch side, has it. Each listed commit is checked out detached into a temporary worktree and
 verified there with its own gate: the command its pyproject.toml declares under
 [tool.sysops_pub.gate], with {commit} replaced by the commit's identity. Without a declaration the
 gate is tools/verify_release.py --require-tools, this repository's own.
@@ -89,18 +89,35 @@ def _is_configured_remote(name: str) -> bool:
     return listed.returncode == 0 and name in listed.stdout.split()
 
 
-def outgoing_commits(refs: Iterable[tuple[str, str]], destination: str) -> list[str]:
-    """Every commit the push would publish to the destination, oldest first, not only each tip.
+def _fetch_urls(name: str) -> list[str]:
+    listed = _git("remote", "get-url", "--all", name)
+    return listed.stdout.split() if listed.returncode == 0 else []
 
-    A commit is outgoing when it is reachable from the pushed object and the destination does not
-    already have it: neither the remote ref's current value nor, when the destination is a named
-    remote, any of that remote's own remote-tracking refs reaches it. Another remote having the
-    commit says nothing about this destination, so other remotes never exclude anything. A push to
-    a bare location excludes only the ref's current value. A remote value this clone has never
-    fetched cannot bound the range, so the push is refused rather than verified on a guess.
+
+def tracking_describes(name: str, location: str) -> bool:
+    """Whether refs/remotes/<name>/* record what the location this push goes to holds.
+
+    Remote-tracking refs are written by fetching from the remote's fetch URL. A push goes to the
+    location Git passes the hook, which differs from that URL when the remote has a pushurl, when
+    one of several push URLs is being pushed, or when the push names a URL directly. Only when the
+    location is a fetch URL of the named remote do its tracking refs describe the destination.
+    """
+    return _is_configured_remote(name) and location in _fetch_urls(name)
+
+
+def outgoing_commits(refs: Iterable[tuple[str, str]], destination: str, location: str) -> list[str]:
+    """Every commit the push would publish to the location, oldest first, not only each tip.
+
+    A commit is outgoing when it is reachable from the pushed object and the location does not
+    already have it: neither the remote ref's current value there (which Git reads from the
+    location itself and passes on stdin) nor, when the location is the named remote's fetch URL,
+    any of that remote's remote-tracking refs reaches it. Another remote, or the same remote's
+    fetch URL when the push goes elsewhere, says nothing about this location, so it never excludes
+    anything. A remote value this clone has never fetched cannot bound the range, so the push is
+    refused rather than verified on a guess.
     """
     commits: list[str] = []
-    tracking = [f"--remotes={destination}"] if _is_configured_remote(destination) else []
+    tracking = [f"--remotes={destination}"] if tracking_describes(destination, location) else []
     for local_sha, remote_sha in refs:
         excluded = list(tracking)
         if not _is_null_sha(remote_sha):
@@ -279,9 +296,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    destination = arguments[0]
+    destination, location = arguments
     try:
-        outgoing_shas = outgoing_commits(parse_outgoing_refs(sys.stdin), destination)
+        outgoing_shas = outgoing_commits(parse_outgoing_refs(sys.stdin), destination, location)
         if not outgoing_shas:
             print("pre-push: no outgoing commits require verification")
             return 0
