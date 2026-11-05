@@ -51,9 +51,9 @@ drift and status report
 ## Quick start
 
 Requirements: Python 3.11 or newer. No third-party Python packages and no POSIX shell are needed for
-the tour or the core tests. It is developed and verified on macOS. The Python-only design is written
-to run on Linux and Windows too, but neither is tested, and the Windows commands in the quick start
-guide are an untested design sketch.
+the tour or the core tests. It is developed on macOS, and a native acceptance run has driven the
+test suite and the install, gate and process lifecycle on Linux and Windows 11 as well; the quick
+start guide records what has and has not run on each platform.
 
 ```text
 git clone https://github.com/sparklbarff/sysops_pub.git
@@ -66,7 +66,7 @@ The demo builds a temporary marked sandbox, exercises the whole loop against it,
 exit. It does not write to your home directory or change any operating-system setting.
 
 See `docs/QUICKSTART.md` for the adoption-bundle builder, the supervised-update and managed-job
-exercises, the untested Windows commands, and the platform evidence table.
+exercises, the Windows commands, and the platform evidence table.
 
 ## Adopt it
 
@@ -160,7 +160,7 @@ The gate's evidence is its output at each push and, for the live manual, the ver
 build prints on the `verify_release` page.
 
 Issues are read; pull requests are not solicited. A defect that could disclose private data or
-weaken a control is reported as described in `SECURITY.md`. It is built and verified by one
+weaken a control is reported as described in `SECURITY.md`. It is built and maintained by one
 operator on macOS.
 
 ## License

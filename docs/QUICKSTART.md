@@ -1,8 +1,10 @@
 # Quick start
 
-This repository is developed and verified on macOS. The primary commands are Python programs with
-no POSIX shell dependency, so they are written to run on Linux and Windows as well, but neither
-platform has a recorded run, and the Windows commands below are an untested design sketch.
+This repository is developed on macOS. The primary commands are Python programs with no POSIX
+shell dependency, and a native acceptance run has driven them on Linux and Windows 11 as well as
+macOS: bootstrap, adoption, the pre-push driver, the managed-job runner, the command guard and
+`tools/test.py`, each called through the Python interpreter. The Windows commands below use the
+`py -3` launcher and have not been run as written. See the compatibility evidence at the end.
 
 ## Get the repository
 
@@ -199,17 +201,20 @@ or a repository whose evidence spans coding-agent runtimes.
 |---|---|---|---|
 | Dependency-free Python design | Reviewed | Reviewed | Reviewed |
 | Claude and Codex adapter design | Reviewed | Reviewed | Reviewed |
-| Native core-suite execution | Python 3.11, 3.12, and 3.14 | Untested | Untested |
-| Native full release verification | Recorded on 2026-09-01 | Untested | Untested |
+| Native core-suite execution | Python 3.11, 3.12, and 3.14 | Python 3.14, at `2014391` | Python 3.12, at `2014391` |
+| Native install-lifecycle acceptance | 27 of 27 cases, at `bcd9309` | 23 baseline cases at `2014391`; 4 lifecycle cases at `bcd9309` | 23 baseline cases at `2014391`; 4 lifecycle cases at `bcd9309` |
+| Native full release verification | Recorded on 2026-09-01 | Not run | Not run |
 
 Python 3.13 was unavailable in the audit environment; that is missing evidence, not a failed run.
-macOS is the only platform with recorded evidence. Linux and Windows are untested and claimed only
-as design intent; the Windows settings example is a design sketch.
+The Linux and Windows evidence is `scripts/acceptance.py` run natively, Windows not under WSL; the
+capability matrix records the platform, Python and Git versions, commit and outcome of each run.
+Neither platform has run the full release verifier, which also needs Black, Ruff, gitleaks and
+ShellCheck, or the Claude Code and Codex hooks inside either agent, and the Windows Claude Code
+settings example remains a design sketch.
 
-If Linux or Windows evidence is ever recorded, record it only from a real native run of the exact
-commit, including the platform, Python version, test command, exit status, and commit SHA. Do not
-substitute a container, compatibility layer, or hosted CI badge without labeling that different
-execution environment.
+Record further evidence only from a real native run of the exact commit, including the platform,
+Python version, test command, exit status, and commit SHA. Do not substitute a container,
+compatibility layer, or hosted CI badge without labeling that different execution environment.
 
 ## Maintainer verification
 

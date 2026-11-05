@@ -222,7 +222,7 @@ class CorpusTests(unittest.TestCase):
             ["init", "plan", "apply", "verify", "report"],
         )
 
-    def test_windows_examples_keep_the_untested_label(self) -> None:
+    def test_windows_examples_keep_the_not_run_label(self) -> None:
         examples = build_site._examples("adopt")
         windows = [line for line in examples if line.startswith("py -3 ")]
         posix = [line for line in examples if line.startswith("python3 ")]
@@ -231,7 +231,7 @@ class CorpusTests(unittest.TestCase):
         for line in windows:
             self.assertTrue(line.endswith(build_site.WINDOWS_EXAMPLE_NOTE), line)
         for line in posix:
-            self.assertNotIn("untested", line)
+            self.assertNotIn(build_site.WINDOWS_EXAMPLE_NOTE.strip(), line)
 
 
 class RevisionAndGateTests(unittest.TestCase):

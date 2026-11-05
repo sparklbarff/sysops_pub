@@ -1438,15 +1438,15 @@ def _write(root: Path, relative: str, text: str) -> None:
     target.write_text(text, encoding="utf-8")
 
 
-WINDOWS_EXAMPLE_NOTE = "  # Windows, untested"
+WINDOWS_EXAMPLE_NOTE = "  # Windows, not run as written"
 
 
 def _examples(name: str) -> list[str]:
     """Every command line in the tracked documents that runs this tool, verbatim.
 
     A line from a PowerShell block carries the documents' own caveat as a trailing comment, which
-    PowerShell ignores: the quick start calls those commands an untested design sketch, and a
-    manual page that dropped the label would present them as tested.
+    PowerShell ignores: the quick start says those `py -3` lines have not been run as written, and
+    a manual page that dropped the label would present them as run.
     """
     found: list[str] = []
     for source in [HOME_SOURCE] + [page.source for page in ALL_PAGES]:

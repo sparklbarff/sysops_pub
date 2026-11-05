@@ -27,6 +27,12 @@ the public entry point in synthetic repositories before repair.
   above, each with a control; `--population` selects it, and the 23-case baseline is counted apart.
   The capability matrix records both populations' native results on macOS, Linux and Windows: the
   baseline 23 of 23 on each, and the lifecycle cases 0 of 4 before repair and 4 of 4 after on each.
+- Stop calling Linux and Windows untested. The README and quick start still said neither platform
+  had a recorded run, which the native acceptance results contradict. The quick start's evidence
+  table now records the native core suite and acceptance on each platform and what has not run
+  there: the full release verifier and the agents' hooks. The manual labels the Windows `py -3`
+  examples as not run as written, since the acceptance run calls the interpreter directly, instead
+  of untested.
 
 ## 0.11.3 - 2026-10-13
 
