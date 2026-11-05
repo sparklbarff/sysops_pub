@@ -3,10 +3,11 @@
 
 Git runs the pre-push hook with the destination remote's name and location as arguments and names
 each ref's local and remote object IDs on stdin. Every commit the push would publish to that
-destination is listed, oldest first: a commit is excluded only when the destination already has it,
-by the ref's current value there or, when the push goes to the remote's own fetch URL, that
-remote's tracking refs; never because another remote, or the same remote's fetch side, has it. Each listed commit is checked out detached into a temporary worktree and
-verified there with its own gate: the command its pyproject.toml declares under
+destination is listed, oldest first: a commit is excluded only when the receiving location already
+has it, by the ref's current value there or a tip the location advertises when asked; never because
+a tracking ref, another remote, or the remote's name says so. Each listed commit is checked out
+detached into a temporary worktree and verified there with its own gate: the command its
+pyproject.toml declares under
 [tool.sysops_pub.gate], with {commit} replaced by the commit's identity. Without a declaration the
 gate is tools/verify_release.py --require-tools, this repository's own.
 
@@ -84,25 +85,37 @@ def _git(*arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _is_configured_remote(name: str) -> bool:
-    listed = _git("remote")
-    return listed.returncode == 0 and name in listed.stdout.split()
+def destination_holds(location: str) -> list[str]:
+    """The commits this clone knows that the receiving location already has, read from it.
 
-
-def _fetch_urls(name: str) -> list[str]:
-    listed = _git("remote", "get-url", "--all", name)
-    return listed.stdout.split() if listed.returncode == 0 else []
-
-
-def tracking_describes(name: str, location: str) -> bool:
-    """Whether refs/remotes/<name>/* record what the location this push goes to holds.
-
-    Remote-tracking refs are written by fetching from the remote's fetch URL. A push goes to the
-    location Git passes the hook, which differs from that URL when the remote has a pushurl, when
-    one of several push URLs is being pushed, or when the push names a URL directly. Only when the
-    location is a fetch URL of the named remote do its tracking refs describe the destination.
+    Remote-tracking refs record what a remote's fetch URL held when it was last fetched. They go
+    stale when the remote is repointed, and they describe nothing when the push goes to a push URL,
+    to another of several URLs, or to a location named directly. So the location is asked: the
+    tips it advertises now, kept when this clone has them as commits. A tip this clone lacks cannot
+    hide any of this clone's commits unless they were already pushed there, so leaving it out can
+    only enlarge the range, never shrink it. A location that cannot be read refuses the push, which
+    would not reach it either.
     """
-    return _is_configured_remote(name) and location in _fetch_urls(name)
+    listed = _git("ls-remote", "--", location)
+    if listed.returncode:
+        detail = listed.stderr.strip() or f"git ls-remote returned {listed.returncode}"
+        raise PrePushError(f"cannot read what {location} already holds: {detail}")
+    tips = sorted({line.split()[0] for line in listed.stdout.splitlines() if line.strip()})
+    if not tips:
+        return []
+    known = subprocess.run(
+        ["git", "cat-file", "--batch-check=%(objectname) %(objecttype)"],
+        cwd=REPO_ROOT,
+        input="\n".join(tips) + "\n",
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return [
+        fields[0]
+        for fields in (line.split() for line in known.stdout.splitlines())
+        if len(fields) == 2 and fields[1] == "commit"
+    ]
 
 
 def outgoing_commits(refs: Iterable[tuple[str, str]], destination: str, location: str) -> list[str]:
@@ -110,16 +123,19 @@ def outgoing_commits(refs: Iterable[tuple[str, str]], destination: str, location
 
     A commit is outgoing when it is reachable from the pushed object and the location does not
     already have it: neither the remote ref's current value there (which Git reads from the
-    location itself and passes on stdin) nor, when the location is the named remote's fetch URL,
-    any of that remote's remote-tracking refs reaches it. Another remote, or the same remote's
-    fetch URL when the push goes elsewhere, says nothing about this location, so it never excludes
-    anything. A remote value this clone has never fetched cannot bound the range, so the push is
-    refused rather than verified on a guess.
+    location itself and passes on stdin) nor any tip the location advertises reaches it. The
+    remote's name decides nothing, so a push through the name and a push to the same location
+    given directly inspect the same commits. A remote value this clone has never fetched cannot
+    bound the range, so the push is refused rather than verified on a guess.
     """
+    del destination  # Kept for the hook's calling convention; the location is the subject.
+    pairs = list(refs)
+    if not pairs:
+        return []
+    held = destination_holds(location)
     commits: list[str] = []
-    tracking = [f"--remotes={destination}"] if tracking_describes(destination, location) else []
-    for local_sha, remote_sha in refs:
-        excluded = list(tracking)
+    for local_sha, remote_sha in pairs:
+        excluded = list(held)
         if not _is_null_sha(remote_sha):
             known = _git("cat-file", "-e", f"{remote_sha}^{{commit}}")
             if known.returncode:

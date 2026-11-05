@@ -54,9 +54,7 @@ from pathlib import Path
 raise SystemExit(0 if Path("fixture.txt").read_text() == "valid\\n" else 1)
 """
 
-DESTINATION = ["origin", "https://example.invalid/sysops-pub.git"]
-MIRROR_URL = "https://example.invalid/mirror.git"
-PUSH_URL = "https://example.invalid/push-only.git"
+HOOK_ARGUMENTS = ["origin", "/nonexistent/destination.git"]
 NOREPLY = "1+example-user" + "@" + "users.noreply.github.com"
 
 
@@ -66,19 +64,55 @@ def _git(repository: Path, *arguments: str) -> str:
     ).stdout.strip()
 
 
+def _bare(directory: str, name: str) -> str:
+    """A local bare repository in the test's own directory, as the push destination."""
+    path = Path(directory) / name
+    subprocess.run(["git", "init", "-q", "--bare", str(path)], check=True)
+    return str(path)
+
+
 def _repository(directory: str) -> Path:
-    """A clone whose verifier passes only when fixture.txt reads "valid"."""
+    """A clone whose verifier passes only when fixture.txt reads "valid", with two local bare
+    remotes, origin and mirror, both empty."""
     repository = Path(directory) / "repository"
     repository.mkdir()
     _git(repository, "init", "-q")
     _git(repository, "config", "user.email", "test" + "@" + "example.invalid")
     _git(repository, "config", "user.name", "Test User")
     _git(repository, "config", "commit.gpgsign", "false")
-    _git(repository, "remote", "add", "origin", DESTINATION[1])
-    _git(repository, "remote", "add", "mirror", MIRROR_URL)
+    _git(repository, "remote", "add", "origin", _bare(directory, "origin.git"))
+    _git(repository, "remote", "add", "mirror", _bare(directory, "mirror.git"))
     (repository / "tools").mkdir()
     (repository / "tools" / "verify_release.py").write_text(VERIFIER, encoding="utf-8")
     return repository
+
+
+def _url(repository: Path, remote: str) -> str:
+    return _git(repository, "remote", "get-url", "--push", remote)
+
+
+def _publish(repository: Path, remote: str, sha: str, branch: str = "main") -> None:
+    """Put a commit on a destination for real. The target must be a bare repository inside the
+    test's own directory, so a fixture that goes wrong cannot push anywhere else."""
+    target = Path(_url(repository, remote)).resolve()
+    if not target.is_relative_to(repository.parent.resolve()):
+        raise AssertionError(f"refusing to push outside the test directory: {target}")
+    _git(repository, "push", "-q", remote, f"{sha}:refs/heads/{branch}")
+
+
+class IsolatedGit(unittest.TestCase):
+    """Git here reads only the repositories' own configuration: the machine's global hooks or
+    settings can neither run during a test push nor change a result."""
+
+    def setUp(self) -> None:
+        config = tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-config-")
+        self.addCleanup(config.cleanup)
+        isolated = mock.patch.dict(
+            os.environ,
+            {"GIT_CONFIG_GLOBAL": str(Path(config.name) / "gitconfig"), "GIT_CONFIG_NOSYSTEM": "1"},
+        )
+        isolated.start()
+        self.addCleanup(isolated.stop)
 
 
 def _commit(repository: Path, fixture: str, message: str) -> str:
@@ -88,7 +122,7 @@ def _commit(repository: Path, fixture: str, message: str) -> str:
     return _git(repository, "rev-parse", "HEAD")
 
 
-class PrePushTests(unittest.TestCase):
+class PrePushTests(IsolatedGit):
     def test_parser_returns_unique_non_deletion_refs(self) -> None:
         first = "1" * 40
         second = "2" * 40
@@ -119,7 +153,7 @@ class PrePushTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
             repository = _repository(directory)
             published = _commit(repository, "valid\n", "already on the remote")
-            _git(repository, "update-ref", "refs/remotes/origin/main", published)
+            _publish(repository, "origin", published)
             broken = _commit(repository, "invalid\n", "intermediate commit that fails")
             tip = _commit(repository, "valid\n", "tip that passes")
             protocol = io.StringIO(f"refs/heads/main {tip} refs/heads/main {published}\n")
@@ -130,7 +164,7 @@ class PrePushTests(unittest.TestCase):
                 mock.patch.object(pre_push.sys, "stderr", stderr),
                 mock.patch.object(pre_push.sys, "stdout", io.StringIO()),
             ):
-                self.assertEqual(pre_push.main(DESTINATION), 2)
+                self.assertEqual(pre_push.main(["origin", _url(repository, "origin")]), 2)
             self.assertIn(
                 f"release verification failed for outgoing commit {broken}", stderr.getvalue()
             )
@@ -139,9 +173,9 @@ class PrePushTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
             repository = _repository(directory)
             published = _commit(repository, "valid\n", "already on origin")
-            _git(repository, "update-ref", "refs/remotes/origin/main", published)
+            _publish(repository, "origin", published)
             mirrored = _commit(repository, "invalid\n", "only the mirror has this one")
-            _git(repository, "update-ref", "refs/remotes/mirror/main", mirrored)
+            _publish(repository, "mirror", mirrored)
             tip = _commit(repository, "valid\n", "new tip")
             protocol = io.StringIO(f"refs/heads/main {tip} refs/heads/main {published}\n")
             stderr = io.StringIO()
@@ -151,38 +185,45 @@ class PrePushTests(unittest.TestCase):
                 mock.patch.object(pre_push.sys, "stderr", stderr),
                 mock.patch.object(pre_push.sys, "stdout", io.StringIO()),
             ):
-                self.assertEqual(pre_push.main(DESTINATION), 2)
+                self.assertEqual(pre_push.main(["origin", _url(repository, "origin")]), 2)
             self.assertIn(
                 f"release verification failed for outgoing commit {mirrored}", stderr.getvalue()
             )
 
-    def test_the_destination_own_tracking_refs_still_bound_the_range(self) -> None:
+    def test_what_the_destination_holds_bounds_the_range(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
             repository = _repository(directory)
             on_origin = _commit(repository, "invalid\n", "origin already has this branch")
-            _git(repository, "update-ref", "refs/remotes/origin/feature", on_origin)
+            _publish(repository, "origin", on_origin, "feature")
             new = _commit(repository, "valid\n", "new branch commit")
+            origin, mirror = _url(repository, "origin"), _url(repository, "mirror")
             with mock.patch.object(pre_push, "REPO_ROOT", repository):
-                self.assertEqual(pre_push.outgoing_commits([(new, "0" * 40)], *DESTINATION), [new])
                 self.assertEqual(
-                    pre_push.outgoing_commits([(new, "0" * 40)], "mirror", MIRROR_URL),
+                    pre_push.outgoing_commits([(new, "0" * 40)], "origin", origin), [new]
+                )
+                self.assertEqual(
+                    pre_push.outgoing_commits([(new, "0" * 40)], "mirror", mirror),
                     [on_origin, new],
                 )
 
-    def test_a_push_to_a_bare_location_excludes_only_the_ref_value(self) -> None:
+    def test_a_location_named_directly_is_read_like_any_other(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
             repository = _repository(directory)
             first = _commit(repository, "valid\n", "first")
-            _git(repository, "update-ref", "refs/remotes/origin/main", first)
+            _publish(repository, "origin", first)
             second = _commit(repository, "valid\n", "second")
-            location = "https://example.invalid/elsewhere.git"
+            elsewhere = _bare(directory, "elsewhere.git")
+            origin = _url(repository, "origin")
             with mock.patch.object(pre_push, "REPO_ROOT", repository):
                 self.assertEqual(
-                    pre_push.outgoing_commits([(second, "0" * 40)], location, location),
+                    pre_push.outgoing_commits([(second, "0" * 40)], elsewhere, elsewhere),
                     [first, second],
                 )
                 self.assertEqual(
-                    pre_push.outgoing_commits([(second, first)], location, location), [second]
+                    pre_push.outgoing_commits([(second, first)], elsewhere, elsewhere), [second]
+                )
+                self.assertEqual(
+                    pre_push.outgoing_commits([(second, "0" * 40)], origin, origin), [second]
                 )
 
     def test_a_separate_push_url_is_not_bounded_by_the_fetch_side(self) -> None:
@@ -191,23 +232,24 @@ class PrePushTests(unittest.TestCase):
         none of them."""
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
             repository = _repository(directory)
-            _git(repository, "remote", "set-url", "--push", "origin", PUSH_URL)
+            fetch_side = _url(repository, "origin")
             first = _commit(repository, "invalid\n", "only the fetch side has this")
             tip = _commit(repository, "valid\n", "fetch side has this too")
-            _git(repository, "update-ref", "refs/remotes/origin/main", tip)
+            _publish(repository, "origin", tip)
+            _git(repository, "fetch", "-q", "origin")
+            push_side = _bare(directory, "push-only.git")
+            _git(repository, "remote", "set-url", "--push", "origin", push_side)
             new_ref = [(tip, "0" * 40)]
             with mock.patch.object(pre_push, "REPO_ROOT", repository):
-                self.assertFalse(pre_push.tracking_describes("origin", PUSH_URL))
-                self.assertTrue(pre_push.tracking_describes("origin", DESTINATION[1]))
                 self.assertEqual(
-                    pre_push.outgoing_commits(new_ref, "origin", PUSH_URL), [first, tip]
+                    pre_push.outgoing_commits(new_ref, "origin", push_side), [first, tip]
                 )
-                # Control: a push to the fetch URL itself is still bounded by its tracking refs.
-                self.assertEqual(pre_push.outgoing_commits(new_ref, *DESTINATION), [])
+                # Control: a push to the fetch URL itself is bounded by what that location holds.
+                self.assertEqual(pre_push.outgoing_commits(new_ref, "origin", fetch_side), [])
                 # The destination's own ref value, which Git reads from the push location, still
                 # bounds the range there.
                 self.assertEqual(
-                    pre_push.outgoing_commits([(tip, first)], "origin", PUSH_URL), [tip]
+                    pre_push.outgoing_commits([(tip, first)], "origin", push_side), [tip]
                 )
             protocol = io.StringIO(f"refs/heads/main {tip} refs/heads/main {'0' * 40}\n")
             stderr = io.StringIO()
@@ -217,22 +259,38 @@ class PrePushTests(unittest.TestCase):
                 mock.patch.object(pre_push.sys, "stderr", stderr),
                 mock.patch.object(pre_push.sys, "stdout", io.StringIO()),
             ):
-                self.assertEqual(pre_push.main(["origin", PUSH_URL]), 2)
+                self.assertEqual(pre_push.main(["origin", push_side]), 2)
             self.assertIn(
                 f"release verification failed for outgoing commit {first}", stderr.getvalue()
             )
 
-    def test_a_push_named_by_its_url_uses_no_tracking_refs(self) -> None:
+    def test_a_repointed_remote_is_judged_by_its_new_destination(self) -> None:
+        """Lifecycle audit 2026-11-05: origin was repointed to a new, empty repository while the
+        old tracking refs remained; inspection through the name found nothing to verify and the
+        same location named directly found the commit."""
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
             repository = _repository(directory)
-            first = _commit(repository, "valid\n", "first")
-            _git(repository, "update-ref", "refs/remotes/origin/main", first)
-            second = _commit(repository, "valid\n", "second")
-            url = DESTINATION[1]
+            only = _commit(repository, "valid\n", "the one commit")
+            _publish(repository, "origin", only)
+            _git(repository, "fetch", "-q", "origin")
+            self.assertEqual(_git(repository, "rev-parse", "refs/remotes/origin/main"), only)
+            new = _bare(directory, "new.git")
+            _git(repository, "remote", "set-url", "origin", new)
+            new_ref = [(only, "0" * 40)]
             with mock.patch.object(pre_push, "REPO_ROOT", repository):
-                self.assertEqual(
-                    pre_push.outgoing_commits([(second, "0" * 40)], url, url), [first, second]
-                )
+                self.assertEqual(pre_push.outgoing_commits(new_ref, "origin", new), [only])
+                self.assertEqual(pre_push.outgoing_commits(new_ref, new, new), [only])
+
+    def test_an_unreadable_destination_refuses_the_push(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
+            repository = _repository(directory)
+            tip = _commit(repository, "valid\n", "local")
+            missing = str(Path(directory) / "missing.git")
+            with (
+                mock.patch.object(pre_push, "REPO_ROOT", repository),
+                self.assertRaisesRegex(pre_push.PrePushError, "cannot read what .* already holds"),
+            ):
+                pre_push.outgoing_commits([(tip, "0" * 40)], missing, missing)
 
     def test_main_refuses_to_run_without_the_destination(self) -> None:
         stderr = io.StringIO()
@@ -245,7 +303,7 @@ class PrePushTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
             repository = _repository(directory)
             published = _commit(repository, "valid\n", "already on the remote")
-            _git(repository, "update-ref", "refs/remotes/origin/main", published)
+            _publish(repository, "origin", published)
             first = _commit(repository, "valid\n", "first")
             second = _commit(repository, "valid\n", "second")
             protocol = io.StringIO(
@@ -259,7 +317,7 @@ class PrePushTests(unittest.TestCase):
                 mock.patch.object(pre_push.sys, "stdout", stdout),
                 mock.patch.object(pre_push, "verify_outgoing_sha", return_value=True) as verify,
             ):
-                self.assertEqual(pre_push.main(DESTINATION), 0)
+                self.assertEqual(pre_push.main(["origin", _url(repository, "origin")]), 0)
             self.assertEqual(verify.call_args_list, [mock.call(first), mock.call(second)])
             self.assertIn("pre-push: verified 2 outgoing commit(s)", stdout.getvalue())
 
@@ -267,20 +325,24 @@ class PrePushTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
             repository = _repository(directory)
             published = _commit(repository, "invalid\n", "already on the remote")
-            _git(repository, "update-ref", "refs/remotes/origin/main", published)
+            _publish(repository, "origin", published)
             new = _commit(repository, "valid\n", "new branch commit")
+            origin = _url(repository, "origin")
             with mock.patch.object(pre_push, "REPO_ROOT", repository):
-                self.assertEqual(pre_push.outgoing_commits([(new, "0" * 40)], *DESTINATION), [new])
+                self.assertEqual(
+                    pre_push.outgoing_commits([(new, "0" * 40)], "origin", origin), [new]
+                )
 
     def test_unknown_remote_commit_refuses_the_push(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
             repository = _repository(directory)
             tip = _commit(repository, "valid\n", "local")
+            origin = _url(repository, "origin")
             with (
                 mock.patch.object(pre_push, "REPO_ROOT", repository),
                 self.assertRaisesRegex(pre_push.PrePushError, "fetch before pushing"),
             ):
-                pre_push.outgoing_commits([(tip, "3" * 40)], *DESTINATION)
+                pre_push.outgoing_commits([(tip, "3" * 40)], "origin", origin)
 
     def _declared_repository(
         self,
@@ -343,7 +405,7 @@ class PrePushTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="sysops-pub-pre-push-test-") as directory:
             repository = _repository(directory)
             published = _commit(repository, "valid\n", "already on the remote")
-            _git(repository, "update-ref", "refs/remotes/origin/main", published)
+            _publish(repository, "origin", published)
             tip = _commit(repository, "valid\n", "same tree as the published commit")
             stdout = io.StringIO()
             with (
@@ -357,7 +419,7 @@ class PrePushTests(unittest.TestCase):
                 self.assertTrue(pre_push.verify_outgoing_sha(changed))
                 protocol = io.StringIO(f"refs/heads/main {changed} refs/heads/main {published}\n")
                 with mock.patch.object(pre_push.sys, "stdin", protocol):
-                    self.assertEqual(pre_push.main(DESTINATION), 0)
+                    self.assertEqual(pre_push.main(["origin", _url(repository, "origin")]), 0)
             output = stdout.getvalue()
             self.assertIn(f"commit {tip} already verified in this clone; skipping", output)
             self.assertIn("verified 0 outgoing commit(s), 2 already verified", output)
@@ -526,7 +588,7 @@ class PrePushTests(unittest.TestCase):
             )
             protocol = f"refs/heads/main {'1' * 40} refs/heads/main {'0' * 40}\n"
             result = subprocess.run(
-                [str(hook), *DESTINATION],
+                [str(hook), *HOOK_ARGUMENTS],
                 cwd=repository,
                 input=protocol,
                 check=False,
@@ -535,7 +597,7 @@ class PrePushTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             record = json.loads(receipt.read_text(encoding="utf-8"))
-            self.assertEqual(record, {"argv": DESTINATION, "stdin": protocol})
+            self.assertEqual(record, {"argv": HOOK_ARGUMENTS, "stdin": protocol})
 
 
 if __name__ == "__main__":
