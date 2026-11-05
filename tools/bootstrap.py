@@ -84,6 +84,22 @@ def current_hooks_path() -> str | None:
     return result.stdout.strip() or None if result.returncode == 0 else None
 
 
+def inherited_hooks_path() -> tuple[str, str, str] | None:
+    """(value, scope, origin) of a core.hooksPath this clone inherits rather than sets locally.
+
+    Git uses the last value it reads, so a local value wins; but with none, a global, system or
+    command-line value is what runs the hooks today, and setting a local one silently overrides
+    the owner's binding. None when no hooks path is in force or the one in force is local.
+    """
+    result = _git_config("config", "--show-scope", "--show-origin", "--get", "core.hooksPath")
+    if result.returncode or not result.stdout.strip():
+        return None
+    scope, origin, value = result.stdout.rstrip("\n").split("\t", 2)
+    if scope == "local":
+        return None
+    return value, scope, origin
+
+
 def active_default_hooks() -> list[str]:
     """Hooks in .git/hooks that Git runs today: not samples, and executable where that applies."""
     hooks = _git_dir() / "hooks"
@@ -117,15 +133,29 @@ def verify() -> None:
         raise BootstrapError("mandatory release tool(s) are unavailable: " + ", ".join(missing))
 
 
+def existing_binding() -> str | None:
+    """What runs this clone's Git hooks today, if anything installing would take over."""
+    previous = current_hooks_path()
+    if previous:
+        return f"core.hooksPath {previous!r}"
+    inherited = inherited_hooks_path()
+    if inherited and inherited[0] != HOOKS_PATH:
+        value, scope, origin = inherited
+        return f"core.hooksPath {value!r}, inherited from {scope} configuration ({origin})"
+    if not inherited:
+        active = active_default_hooks()
+        if active:
+            return f"the active hook(s) in .git/hooks ({', '.join(active)})"
+    return None
+
+
 def install(replace: bool) -> None:
     previous, active = current_hooks_path(), active_default_hooks()
     if previous == HOOKS_PATH:
         verify()
         print("bootstrap: already installed; verified")
         return
-    owned = f"core.hooksPath {previous!r}" if previous else None
-    if active and not previous:
-        owned = f"the active hook(s) in .git/hooks ({', '.join(active)})"
+    owned = existing_binding()
     if owned and not replace:
         raise BootstrapError(
             f"this clone's Git hooks already run through {owned}; installing would stop them. "
@@ -138,6 +168,8 @@ def install(replace: bool) -> None:
         "pre_push_sha256": hashlib.sha256(PRE_PUSH.read_bytes()).hexdigest(),
         "previous_hooks_path": previous,
         "previous_active_hooks": active,
+        # Not ours to restore: removing the local value lets it apply again.
+        "previous_inherited_hooks_path": inherited_hooks_path() if not previous else None,
     }
     record_path = _record_path()
     temporary = record_path.with_name(f".{RECORD_NAME}.{os.getpid()}")
@@ -207,11 +239,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("MISSING mandatory release tool(s): " + ", ".join(missing))
         else:
             print("READY mandatory release tools: " + (", ".join(release_tools()) or "none"))
-        previous, active = current_hooks_path(), active_default_hooks()
-        if previous and previous != HOOKS_PATH:
-            print(f"EXISTING core.hooksPath {previous!r} would be replaced")
-        elif active and not previous:
-            print("EXISTING active .git/hooks would stop running: " + ", ".join(active))
+        existing = existing_binding() if current_hooks_path() != HOOKS_PATH else None
+        if existing:
+            print(
+                f"CONFLICT this clone's hooks run through {existing}; installing needs "
+                "--replace-existing-hooks, and --uninstall restores it"
+            )
         print(f"WOULD SET git config --local core.hooksPath {HOOKS_PATH}")
         if not args.execute:
             print("dry-run only: pass --execute to install the local gate")

@@ -18,6 +18,17 @@ import bootstrap
 
 class BootstrapTests(unittest.TestCase):
     def setUp(self) -> None:
+        # Git here reads only the repository's configuration and a synthetic global file, so the
+        # machine's own hooks setup can neither satisfy nor break a test.
+        self.config = tempfile.TemporaryDirectory(prefix="sysops-pub-bootstrap-config-")
+        self.addCleanup(self.config.cleanup)
+        self.global_config = Path(self.config.name) / "gitconfig"
+        isolated = mock.patch.dict(
+            os.environ,
+            {"GIT_CONFIG_GLOBAL": str(self.global_config), "GIT_CONFIG_NOSYSTEM": "1"},
+        )
+        isolated.start()
+        self.addCleanup(isolated.stop)
         self.temporary = tempfile.TemporaryDirectory(prefix="sysops-pub-bootstrap-")
         self.repository = Path(self.temporary.name)
         subprocess.run(["git", "init", "-q"], cwd=self.repository, check=True)
@@ -128,7 +139,9 @@ class BootstrapTests(unittest.TestCase):
         self.set_hooks_path(".existing-hooks")
         result, stdout, stderr = self.run_bootstrap("--execute")
         self.assertEqual(result, 2)
-        self.assertIn("EXISTING core.hooksPath '.existing-hooks' would be replaced", stdout)
+        self.assertIn(
+            "CONFLICT this clone's hooks run through core.hooksPath '.existing-hooks'", stdout
+        )
         self.assertIn("--replace-existing-hooks", stderr)
         self.assertEqual(self.configured_hooks_path(), ".existing-hooks")
 
@@ -168,9 +181,50 @@ class BootstrapTests(unittest.TestCase):
         hook.chmod(0o755)
         result, stdout, _stderr = self.run_bootstrap("--execute")
         self.assertEqual(result, 2)
-        self.assertIn("would stop running: pre-commit", stdout)
+        self.assertIn("the active hook(s) in .git/hooks (pre-commit)", stdout)
         self.assertEqual(self.configured_hooks_path(), "")
         self.assertEqual(self.run_bootstrap("--uninstall")[0], 2)
+
+    def effective_hooks_path(self) -> str:
+        result = subprocess.run(
+            ["git", "config", "--get", "core.hooksPath"],
+            cwd=self.repository,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+
+    def test_an_inherited_hooks_path_is_previewed_and_preserved(self) -> None:
+        """Lifecycle audit 2026-11-05: an inherited binding was overridden without a word."""
+        inherited = (Path(self.config.name) / "owner hooks").as_posix()
+        self.global_config.write_text(f'[core]\n\thooksPath = "{inherited}"\n', encoding="utf-8")
+        result, stdout, _stderr = self.run_bootstrap()
+        self.assertEqual(result, 0)
+        self.assertIn(f"core.hooksPath '{inherited}', inherited from global configuration", stdout)
+        result, _stdout, stderr = self.run_bootstrap("--execute")
+        self.assertEqual(result, 2)
+        self.assertIn("inherited from global configuration", stderr)
+        self.assertEqual(self.configured_hooks_path(), "")
+        self.assertEqual(self.effective_hooks_path(), inherited)
+
+    def test_taking_over_an_inherited_hooks_path_is_explicit_and_undone(self) -> None:
+        inherited = (Path(self.config.name) / "owner hooks").as_posix()
+        self.global_config.write_text(f'[core]\n\thooksPath = "{inherited}"\n', encoding="utf-8")
+        result, _stdout, stderr = self.run_bootstrap("--execute", "--replace-existing-hooks")
+        self.assertEqual(result, 0, stderr)
+        self.assertEqual(self.effective_hooks_path(), ".githooks")
+        record = (self.repository / ".git" / bootstrap.RECORD_NAME).read_text(encoding="utf-8")
+        self.assertIn(inherited, record)
+        self.assertEqual(self.run_bootstrap("--uninstall")[0], 0)
+        self.assertEqual(self.configured_hooks_path(), "")
+        self.assertEqual(self.effective_hooks_path(), inherited)
+
+    def test_an_inherited_hooks_path_that_is_already_ours_is_no_conflict(self) -> None:
+        self.global_config.write_text('[core]\n\thooksPath = ".githooks"\n', encoding="utf-8")
+        result, stdout, stderr = self.run_bootstrap("--execute")
+        self.assertEqual(result, 0, stderr)
+        self.assertNotIn("CONFLICT", stdout)
 
 
 if __name__ == "__main__":
