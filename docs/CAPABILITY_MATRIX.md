@@ -33,7 +33,7 @@ private capability or manage a collaborator's live workstation directly.
 | Browser automation | Firefox-only dedicated Playwright MCP registration with matching managed browser build | Generic explicit-browser and MCP-owned-install guidance using Firefox as the example | Sanitized adapter |
 | Agent status cockpit | Live lifecycle hooks publish a sanitized repository label and state to iTerm2 | Optional non-mutating iTerm2 user-variable publisher; lifecycle wiring remains local | macOS optional adapter |
 | macOS management | Homebrew, defaults, Dock, shell, window management, LaunchAgents, themes, privacy, and password-store integration | Lifecycle guidance only; no operating-system mutation command | Design-only by policy |
-| Windows and Linux | Not the private controller's host target | The 23-case baseline install-lifecycle acceptance passed natively on Linux and Windows 11 as well as macOS; the four lifecycle cases added on 2026-11-05 have a recorded run on macOS only. Claude Code and Codex hooks were not run inside either agent on Linux or Windows | Baseline natively accepted on all three; lifecycle cases macOS only (see Native acceptance) |
+| Windows and Linux | Not the private controller's host target | The 23-case baseline install-lifecycle acceptance passed natively on Linux and Windows 11 as well as macOS, and the four lifecycle cases added on 2026-11-05 failed before repair and passed after it on all three. Claude Code and Codex hooks were not run inside either agent on Linux or Windows | Natively accepted on all three (see Native acceptance) |
 | Workstation diagnostics | Reads real host processes, applications, services, logs, and configuration | No live host diagnostics | Deliberate omission |
 | AI configuration deployment | Reconciles a managed-file set plus hybrid settings | No live home-directory deployment | Deliberate omission |
 | Secrets and recovery | Encrypted private material and password-store operations exist outside the share boundary | Prohibited by the export manifest and disclosure scanner | Deliberate omission |
@@ -53,21 +53,23 @@ recorded result.
 | Population | Cases | Commit | macOS | Linux | Windows |
 |---|---|---|---|---|---|
 | baseline | 23 | `2014391` | 23 of 23 passed | 23 of 23 passed | 23 of 23 passed |
-| lifecycle | 4 | `2014391`, before repair | 0 of 4 passed | Not run | Not run |
-| lifecycle | 4 | `bcd9309`, after repair | 4 of 4 passed | Not run | Not run |
+| lifecycle | 4 | `2014391`, before repair | 0 of 4 passed | 0 of 4 passed | 0 of 4 passed |
+| lifecycle | 4 | `bcd9309`, after repair | 4 of 4 passed | 4 of 4 passed | 4 of 4 passed |
 
-Runtimes: macOS 26.7.1 on arm64 with Python 3.11.18 and Git 2.56.0; Linux 7.0.0 on x86_64 with
-glibc 2.43, Python 3.14.4 and Git 2.53.0; Windows 11 build 26300 natively, not WSL, with Python
-3.12.8 and Git 2.47.1. On macOS the baseline also passed 23 of 23 at `bcd9309`, so the repairs
-did not regress it there.
+Runtimes, the same for both populations: macOS 26.7.1 on arm64 with Python 3.11.18 and Git
+2.56.0; Linux 7.0.0 on x86_64 with glibc 2.43, Python 3.14.4 and Git 2.53.0; Windows 11 build
+26300 natively, not WSL, with Python 3.12.8 and Git 2.47.1. The before-repair rows ran the
+`bcd9309` acceptance script against a clone of `2014391`, so the same cases judged both revisions.
+On macOS the baseline also passed 23 of 23 at `bcd9309`, so the repairs did not regress it there;
+the baseline was not rerun at `bcd9309` on Linux or Windows.
 
 The lifecycle population covers four failures found on 2026-11-05: a settings edit lost through
 re-adoption and uninstall, push inspection that trusted stale tracking refs after a remote was
 repointed, no drift reported for a helper that was already present when adopted, and an inherited
 hooks path overridden without warning. Each case carries a control that passed before and after
 the repair: direct uninstall, a split fetch and push URL, an unchanged pre-existing helper, and
-explicit takeover with uninstall. Linux and Windows results for these four cases are not recorded;
-until they are, the repairs are established natively on macOS only.
+explicit takeover with uninstall. Each failure reproduced natively on all three platforms before
+the repair, and each repair holds natively on all three.
 
 ## Reading the matrix
 

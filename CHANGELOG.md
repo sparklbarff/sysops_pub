@@ -25,8 +25,8 @@ the public entry point in synthetic repositories before repair.
   restoration still work.
 - The native acceptance script gains a separate lifecycle population of four cases, one per failure
   above, each with a control; `--population` selects it, and the 23-case baseline is counted apart.
-  The capability matrix now records the baseline's native results on macOS, Linux and Windows and
-  the lifecycle results on macOS, the only platform they have run on.
+  The capability matrix records both populations' native results on macOS, Linux and Windows: the
+  baseline 23 of 23 on each, and the lifecycle cases 0 of 4 before repair and 4 of 4 after on each.
 
 ## 0.11.3 - 2026-10-13
 
