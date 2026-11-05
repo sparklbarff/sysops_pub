@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.11.4 - 2026-11-05
+
+Four installation, removal and push-inspection failures from a lifecycle audit, each reproduced at
+the public entry point in synthetic repositories before repair.
+
+- Keep settings edits made after adoption. Re-adoption recorded an edited `.claude/settings.json`
+  as the installer's own even though the merge wrote nothing, so uninstall restored the backup over
+  the edit. Only a write now updates the record, and a settings file that a later merge wrote over
+  an edit is kept on uninstall, with the backup named. Direct uninstall of an unedited file still
+  restores the original.
+- Inspect pushes against the receiving destination. The driver bounded the range by the remote's
+  tracking refs, which go stale when a remote is repointed, and treated a location named directly
+  differently from the same location named by its remote. The range is now bounded by what the
+  location itself reports it holds, so named and direct pushes inspect the same commits, and a
+  destination that cannot be read refuses the push. A separate push URL is still judged by the push
+  side.
+- Check helpers the hooks run that were already present. A wired helper identical to the release
+  when adopted was neither recorded nor checked, so later drift went unreported. It is now recorded
+  as pre-existing: checked for drift, never updated, and kept on uninstall.
+- Respect an inherited hooks path. Bootstrap read only this clone's `core.hooksPath`, so a global or
+  system hooks path was overridden without warning. The preview now names the inherited binding and
+  where it comes from, an ordinary install leaves it in force, and explicit takeover and uninstall
+  restoration still work.
+- The native acceptance script gains a separate lifecycle population of four cases, one per failure
+  above, each with a control; `--population` selects it, and the 23-case baseline is counted apart.
+  The capability matrix now records the baseline's native results on macOS, Linux and Windows and
+  the lifecycle results on macOS, the only platform they have run on.
+
 ## 0.11.3 - 2026-10-13
 
 Repairs for the remaining public findings of the same joint audit, each reproduced first.

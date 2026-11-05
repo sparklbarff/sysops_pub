@@ -189,8 +189,12 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual(body.count('class="panel"'), fences)
         matrix = (ROOT / "docs/CAPABILITY_MATRIX.md").read_text(encoding="utf-8")
         rows = [line for line in matrix.splitlines() if line.startswith("|")]
+        # Every table has one separator line, which renders no row; the rest each render one.
+        separators = [line for line in rows if build_site.TABLE_RULE.match(line)]
+        self.assertGreaterEqual(len(separators), 1)
         body = build_site.render_markdown(matrix, context("4")).body
-        self.assertEqual(body.count("<tr>"), len(rows) - 1)
+        self.assertEqual(body.count("<tr>"), len(rows) - len(separators))
+        self.assertEqual(body.count("<table"), len(separators))
 
     def test_both_diagrams_are_redrawn(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

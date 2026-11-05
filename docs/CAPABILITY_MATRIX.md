@@ -12,8 +12,8 @@ private capability or manage a collaborator's live workstation directly.
 | Drift semantics | Compares live state directly with declared state; snapshots are diagnostic observations only | Detects missing and drifted sandbox files directly from declarations | Portable reimplementation |
 | Status reporting | Covers every registered verifier component and names failed components | Reports matched, missing, drifted, unsafe, and unmanaged files | Portable reimplementation |
 | Configuration validation | Validates the registry plus selected defaults, Brew, and Dock declarations | Validates registry, profile, platform, path, overlap, marker, and symlink constraints | Portable reimplementation |
-| Repository bootstrap | Installs workstation prerequisites and packages | Previews, installs, and verifies only this clone's mandatory pre-push gate | Deliberately narrower |
-| Delivery gates | Local pre-commit and post-commit controls protect the private source and deployment loop | A tracked pre-push gate verifies each exact outgoing commit in an isolated worktree | Portable control pattern, different lifecycle |
+| Repository bootstrap | Installs workstation prerequisites and packages | Previews, installs, verifies and removes only this clone's mandatory pre-push gate; reads the hooks path Git actually uses, local or inherited, and takes over an existing binding only when told, restoring it on removal | Deliberately narrower |
+| Delivery gates | Local pre-commit and post-commit controls protect the private source and deployment loop | A tracked pre-push gate verifies each exact outgoing commit in an isolated worktree, bounded by what the receiving location reports it holds, never by tracking refs or the remote's name | Portable control pattern, different lifecycle |
 | Claude Code integration | Live identity, hooks, policies, and deployment | Reviewable project policy, settings, and three wired guards with block-and-admit proofs | Sanitized adapter |
 | Command guard | A multi-tool guard blocks credential reads and writes, dangerous commands, pipe-masked pushes and private-address fetches, by parsed command structure | `examples/enforcement/command_guard.py`: the same five classes over synthetic commands, top-level structure only, unparsable input blocked | Portable reimplementation; substitutions and interpreter strings are documented blind spots |
 | Edit freshness guard | Blocks an Edit of a file not fully read this session or changed on disk since, and a shell write to a path with a pending stale block | `examples/enforcement/read_guard.py`: record, check and shell modes keyed by session, state outside the project, Write exempt | Portable reimplementation; a windowed read counts as a read |
@@ -33,13 +33,41 @@ private capability or manage a collaborator's live workstation directly.
 | Browser automation | Firefox-only dedicated Playwright MCP registration with matching managed browser build | Generic explicit-browser and MCP-owned-install guidance using Firefox as the example | Sanitized adapter |
 | Agent status cockpit | Live lifecycle hooks publish a sanitized repository label and state to iTerm2 | Optional non-mutating iTerm2 user-variable publisher; lifecycle wiring remains local | macOS optional adapter |
 | macOS management | Homebrew, defaults, Dock, shell, window management, LaunchAgents, themes, privacy, and password-store integration | Lifecycle guidance only; no operating-system mutation command | Design-only by policy |
-| Windows and Linux | Not the private controller's host target | Dependency-free core and the operations demos are written to run on both; neither has a recorded run, and the Windows settings example is an untested design sketch | Untested; macOS is the only evidenced platform |
+| Windows and Linux | Not the private controller's host target | The 23-case baseline install-lifecycle acceptance passed natively on Linux and Windows 11 as well as macOS; the four lifecycle cases added on 2026-11-05 have a recorded run on macOS only. Claude Code and Codex hooks were not run inside either agent on Linux or Windows | Baseline natively accepted on all three; lifecycle cases macOS only (see Native acceptance) |
 | Workstation diagnostics | Reads real host processes, applications, services, logs, and configuration | No live host diagnostics | Deliberate omission |
 | AI configuration deployment | Reconciles a managed-file set plus hybrid settings | No live home-directory deployment | Deliberate omission |
 | Secrets and recovery | Encrypted private material and password-store operations exist outside the share boundary | Prohibited by the export manifest and disclosure scanner | Deliberate omission |
 | Memories, logs, ledgers, and analytics | Private continuity and observability surfaces | Prohibited; examples use synthetic fixtures | Deliberate omission |
 | Spectre and Eidolon | Real project governance and evidence history remain private | Recognizable, sanitized case studies and exercises | Sanitized case study |
-| Live user installer | Private scripts target one reviewed workstation | Adoption tool builds a reviewable bundle and installs project-local starters into a named existing project directory (preview-first, non-overwriting, settings merged after backup); installing into live home or global tool configuration stays deferred | Project-scoped; home install deferred |
+| Live user installer | Private scripts target one reviewed workstation | Adoption tool builds a reviewable bundle and installs project-local starters into a named existing project directory (preview-first, non-overwriting, settings merged after backup); it records what it wrote, keeps settings edits made after adoption through re-adoption, update and uninstall, and checks helpers the hooks run that were already present without taking them over; installing into live home or global tool configuration stays deferred | Project-scoped; home install deferred |
+
+## Native acceptance
+
+`scripts/acceptance.py` clones a commit into a directory whose name contains spaces and drives the
+public entry points (`tools/bootstrap.py`, `tools/adopt.py`, `tools/pre_push.py`,
+`tools/managed_job.py`, the command guard and `tools/test.py`) in synthetic local repositories. An
+exit code alone is not the result: each case reads back the files, configuration or commit range
+the entry point left. Cases belong to a population, counted separately, so new cases never alter a
+recorded result.
+
+| Population | Cases | Commit | macOS | Linux | Windows |
+|---|---|---|---|---|---|
+| baseline | 23 | `2014391` | 23 of 23 passed | 23 of 23 passed | 23 of 23 passed |
+| lifecycle | 4 | `2014391`, before repair | 0 of 4 passed | Not run | Not run |
+| lifecycle | 4 | `bcd9309`, after repair | 4 of 4 passed | Not run | Not run |
+
+Runtimes: macOS 26.7.1 on arm64 with Python 3.11.18 and Git 2.56.0; Linux 7.0.0 on x86_64 with
+glibc 2.43, Python 3.14.4 and Git 2.53.0; Windows 11 build 26300 natively, not WSL, with Python
+3.12.8 and Git 2.47.1. On macOS the baseline also passed 23 of 23 at `bcd9309`, so the repairs
+did not regress it there.
+
+The lifecycle population covers four failures found on 2026-11-05: a settings edit lost through
+re-adoption and uninstall, push inspection that trusted stale tracking refs after a remote was
+repointed, no drift reported for a helper that was already present when adopted, and an inherited
+hooks path overridden without warning. Each case carries a control that passed before and after
+the repair: direct uninstall, a split fetch and push URL, an unchanged pre-existing helper, and
+explicit takeover with uninstall. Linux and Windows results for these four cases are not recorded;
+until they are, the repairs are established natively on macOS only.
 
 ## Reading the matrix
 
