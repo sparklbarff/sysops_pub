@@ -311,6 +311,123 @@ class AdoptionTests(unittest.TestCase):
             self.assertFalse(record_path.exists())
             self.assertEqual(self.run_adopt("--into", str(project), "--uninstall")[0], 2)
 
+    def _adopted_with_settings(self, directory: str) -> tuple[Path, Path, tuple[str, ...]]:
+        project = Path(directory) / "proj"
+        (project / ".claude").mkdir(parents=True)
+        settings_path = project / ".claude" / "settings.json"
+        settings_path.write_text(json.dumps({"model": "my-model"}), encoding="utf-8")
+        args = ("--into", str(project), "--tool", "claude-code", "--platform", "posix")
+        self.assertEqual(self.run_adopt(*args, "--execute")[0], 0)
+        return project, settings_path, args
+
+    @staticmethod
+    def _edit_settings(settings_path: Path) -> bytes:
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+        data["model"] = "changed after adoption"
+        settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        return settings_path.read_bytes()
+
+    def test_a_settings_edit_survives_readoption_and_uninstall(self) -> None:
+        """Lifecycle audit 2026-11-05: re-adoption took the edited file as its own, and
+        uninstall restored the original backup over the edit. Direct uninstall is the control."""
+        for readopt in (True, False):
+            with (
+                self.subTest(readopt=readopt),
+                tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory,
+            ):
+                project, settings_path, args = self._adopted_with_settings(directory)
+                record_path = project / adopt.RECORD_REL
+                written = json.loads(record_path.read_text(encoding="utf-8"))["settings"]
+                edited = self._edit_settings(settings_path)
+                if readopt:
+                    result, stdout, stderr = self.run_adopt(*args, "--execute")
+                    self.assertEqual(result, 0, stderr)
+                    self.assertIn("UNCHANGED .claude/settings.json (edited since adoption", stdout)
+                    after = json.loads(record_path.read_text(encoding="utf-8"))["settings"]
+                    self.assertEqual(after, written)
+                result, stdout, _stderr = self.run_adopt(
+                    "--into", str(project), "--uninstall", "--execute"
+                )
+                self.assertEqual(result, 1)
+                self.assertIn("KEEP     .claude/settings.json (changed since adoption)", stdout)
+                self.assertEqual(settings_path.read_bytes(), edited)
+                self.assertTrue(settings_path.with_name("settings.json.sysops-pub.bak").exists())
+
+    def test_a_settings_edit_survives_an_update_that_merges_into_it(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
+            project, settings_path, args = self._adopted_with_settings(directory)
+            self._edit_settings(settings_path)
+            # The next release adds a permission, so re-adoption really writes the edited file.
+            release = Path(directory) / "settings.next.json"
+            addition = json.loads(
+                (ROOT / "examples" / "claude-code" / "settings.posix.json.example").read_text(
+                    encoding="utf-8"
+                )
+            )
+            addition["permissions"]["deny"].append("SomethingNew")
+            release.write_text(json.dumps(addition), encoding="utf-8")
+            targets = adopt._install_targets
+
+            def next_release(tool: str, platform: str) -> list[tuple[Path, Path]]:
+                return [
+                    (release if rel == adopt.SETTINGS_REL else source, rel)
+                    for source, rel in targets(tool, platform)
+                ]
+
+            with mock.patch.object(adopt, "_install_targets", next_release):
+                result, stdout, stderr = self.run_adopt(*args, "--execute")
+            self.assertEqual(result, 0, stderr)
+            self.assertIn("MERGED .claude/settings.json", stdout)
+            merged = json.loads(settings_path.read_text(encoding="utf-8"))
+            self.assertIn("SomethingNew", merged["permissions"]["deny"])
+            self.assertEqual(merged["model"], "changed after adoption")
+            merged_bytes = settings_path.read_bytes()
+            record = json.loads((project / adopt.RECORD_REL).read_text(encoding="utf-8"))
+            self.assertIs(record["settings"]["restorable"], False)
+            result, stdout, _stderr = self.run_adopt(
+                "--into", str(project), "--uninstall", "--execute"
+            )
+            self.assertEqual(result, 1)
+            self.assertIn("holds edits made after adoption", stdout)
+            self.assertEqual(settings_path.read_bytes(), merged_bytes)
+            backup = settings_path.with_name("settings.json.sysops-pub.bak")
+            self.assertEqual(json.loads(backup.read_text(encoding="utf-8")), {"model": "my-model"})
+
+    def test_a_preexisting_wired_helper_is_checked_but_never_ours(self) -> None:
+        """Lifecycle audit 2026-11-05: an identical helper already in place was not recorded, so
+        its later change showed no drift. The unchanged one is the control."""
+        with tempfile.TemporaryDirectory(prefix="sysops-pub-into-") as directory:
+            project = Path(directory) / "proj"
+            (project / ".agent-tools").mkdir(parents=True)
+            changed = project / ".agent-tools" / "scope_guard.py"
+            unchanged = project / ".agent-tools" / "command_guard.py"
+            for helper in (changed, unchanged):
+                helper.write_bytes((ROOT / "examples" / "enforcement" / helper.name).read_bytes())
+            args = ("--into", str(project), "--tool", "claude-code", "--platform", "posix")
+            self.assertEqual(self.run_adopt(*args, "--execute")[0], 0)
+            record = json.loads((project / adopt.RECORD_REL).read_text(encoding="utf-8"))
+            self.assertEqual(
+                sorted(record["preexisting"]),
+                [".agent-tools/command_guard.py", ".agent-tools/scope_guard.py"],
+            )
+            self.assertNotIn(".agent-tools/scope_guard.py", record["files"])
+            self.assertEqual(self.run_adopt("--into", str(project), "--check")[0], 0)
+            edited = changed.read_bytes() + b"# changed after adoption\n"
+            changed.write_bytes(edited)
+            result, stdout, _stderr = self.run_adopt("--into", str(project), "--check")
+            self.assertEqual(result, 1)
+            self.assertIn("DRIFTED  .agent-tools/scope_guard.py (was here before adoption", stdout)
+            self.assertIn(
+                "OK       .agent-tools/command_guard.py (was here before adoption", stdout
+            )
+            result, stdout, _stderr = self.run_adopt(
+                "--into", str(project), "--uninstall", "--execute"
+            )
+            self.assertIn("KEEP     .agent-tools/scope_guard.py (was here before adoption)", stdout)
+            self.assertEqual(changed.read_bytes(), edited)
+            self.assertTrue(unchanged.exists())
+            self.assertFalse((project / "CLAUDE.md").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

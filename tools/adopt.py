@@ -317,6 +317,10 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
 
     record = _read_record(project)
     owned: dict[str, str] = dict(record.get("files") or {})
+    # Helpers the installed hooks run that were already here, identical, before adoption: the
+    # policy depends on them, so their integrity is recorded and checked, but they are the
+    # owner's, so nothing here ever updates or removes them.
+    preexisting: dict[str, str] = dict(record.get("preexisting") or {})
     actions: list[tuple[str, Path]] = []
     for source, rel in placements:
         destination = _project_destination(project, rel)
@@ -326,6 +330,8 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
             actions.append(("place", rel))
         elif destination.is_file() and _sha256(destination) == _sha256(source):
             actions.append(("present-identical", rel))
+            if rel.as_posix() not in owned and rel.as_posix().startswith(WIRED):
+                preexisting[rel.as_posix()] = _sha256(destination)
         elif destination.is_file() and owned.get(rel.as_posix()) == _sha256(destination):
             # Placed by an earlier adoption and unchanged since: ours to update.
             actions.append(("update", rel))
@@ -384,35 +390,48 @@ def _install_into(project: Path, tool: str, platform: str, execute: bool) -> int
         _atomic_write(destination, source.read_bytes())
         owned[rel.as_posix()] = _sha256(destination)
         print(f"{'UPDATED' if action == 'update' else 'PLACED'} {rel.as_posix()}")
+    # The settings record holds the original (as a backup, or "placed" when there was none) and
+    # "sha256", the last state this tool actually wrote. Only a write updates it: a merge that
+    # changes nothing writes nothing, so it cannot claim the user's edited file as ours. A merge
+    # into a file someone edited after our last write carries their edit; from then on restoring
+    # the original would erase it, so "restorable" goes false and uninstall keeps the file.
     settings_record = dict(record.get("settings") or {})
     if settings_source is not None:
         settings_dest = _project_destination(project, SETTINGS_REL)
         addition = json.loads(settings_source.read_text(encoding="utf-8"))
+        last_written = settings_record.get("sha256")
         if settings_dest.exists():
+            edited_since = bool(last_written) and _sha256(settings_dest) != last_written
             existing = json.loads(settings_dest.read_text(encoding="utf-8"))
             merged, changed = _merge_settings(existing, addition)
             if changed:
                 backup = settings_dest.with_name(settings_dest.name + ".sysops-pub.bak")
                 _project_destination(project, backup.relative_to(project))
-                if not backup.exists():
+                if not last_written and not backup.exists():
                     shutil.copyfile(settings_dest, backup)
                     settings_record.setdefault("backup", backup.name)
+                if edited_since:
+                    settings_record["restorable"] = False
                 _atomic_write(settings_dest, (json.dumps(merged, indent=2) + "\n").encode())
+                settings_record["sha256"] = _sha256(settings_dest)
                 print(f"MERGED {SETTINGS_REL.as_posix()} (backup {backup.name})")
             else:
-                print(f"UNCHANGED {SETTINGS_REL.as_posix()}")
+                note = " (edited since adoption; left as it is)" if edited_since else ""
+                print(f"UNCHANGED {SETTINGS_REL.as_posix()}{note}")
         else:
             settings_dest.parent.mkdir(parents=True, exist_ok=True)
             _project_destination(project, SETTINGS_REL)
             _atomic_write(settings_dest, settings_source.read_bytes())
-            settings_record["placed"] = True
+            if not last_written:
+                settings_record["placed"] = True
+            settings_record["sha256"] = _sha256(settings_dest)
             print(f"PLACED {SETTINGS_REL.as_posix()}")
-        settings_record["sha256"] = _sha256(settings_dest)
     record.update(
         source_commit=_source_commit(),
         tool=tool,
         platform=platform,
         files=owned,
+        preexisting=preexisting,
         settings=settings_record,
         skipped=[rel.as_posix() for action, rel in actions if action == "present-differs-skip"],
     )
@@ -432,6 +451,11 @@ def _check(project: Path) -> int:
         state = "MISSING" if not path.exists() else "OK" if _sha256(path) == digest else "DRIFTED"
         drift += state != "OK"
         print(f"{state:8} {rel}")
+    for rel, digest in sorted((record.get("preexisting") or {}).items()):
+        path = _project_destination(project, Path(rel))
+        state = "MISSING" if not path.exists() else "OK" if _sha256(path) == digest else "DRIFTED"
+        drift += state != "OK"
+        print(f"{state:8} {rel} (was here before adoption; the hooks run it)")
     settings = record.get("settings") or {}
     if settings.get("sha256"):
         path = _project_destination(project, SETTINGS_REL)
@@ -461,12 +485,23 @@ def _uninstall(project: Path, execute: bool) -> int:
         print(f"{prefix}REMOVE {rel}")
         if execute:
             path.unlink()
+    for rel in sorted(record.get("preexisting") or {}):
+        if _project_destination(project, Path(rel)).exists():
+            print(f"KEEP     {rel} (was here before adoption)")
     settings = record.get("settings") or {}
     settings_path = _project_destination(project, SETTINGS_REL)
     if settings.get("sha256") and settings_path.exists():
         if _sha256(settings_path) != settings["sha256"]:
             kept += 1
             print(f"KEEP     {SETTINGS_REL.as_posix()} (changed since adoption)")
+        elif settings.get("restorable") is False:
+            kept += 1
+            original = settings.get("backup")
+            print(
+                f"KEEP     {SETTINGS_REL.as_posix()} (holds edits made after adoption; "
+                + (f"the original is in {original}" if original else "there was no original")
+                + ")"
+            )
         elif settings.get("placed"):
             print(f"{prefix}REMOVE {SETTINGS_REL.as_posix()}")
             if execute:
